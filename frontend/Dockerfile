@@ -2,10 +2,10 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-COPY package*.json ./
+COPY frontend/package*.json ./
 RUN npm ci
 
-COPY . .
+COPY frontend/ .
 RUN npm run build
 
 FROM node:20-alpine AS runner
@@ -25,8 +25,8 @@ RUN chown -R nextjs:nodejs /app
 
 USER nextjs
 
-EXPOSE 3000
+EXPOSE 5173
 
-ENV PORT=3000
+ENV PORT=5173
 
 CMD ["node", "server.js"]
