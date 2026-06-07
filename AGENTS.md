@@ -273,6 +273,7 @@ Before coding, read these files in order:
 ## Coding Flow
 
 1. Read the context files listed above.
+   - `docs/PROJECT_STRUCTURE.md` includes a **Known Issues & Problems** section — review it before starting any work to avoid reintroducing known bugs.
 2. Make a short implementation plan.
 3. Then code.
 
