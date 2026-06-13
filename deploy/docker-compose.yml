@@ -30,11 +30,11 @@ services:
       DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/tripova
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRY_HOURS: ${JWT_EXPIRY_HOURS:-72}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://frontend:5173}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5174,http://192.168.1.5:5174}
       DEBUG: ${DEBUG:-false}
       GOOGLE_PLACES_API_KEY: ${GOOGLE_PLACES_API_KEY:-}
-    expose:
-      - "8010"
+    ports:
+      - "${BACKEND_PORT:-8010}:8010"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8010/health', timeout=5).read()"]
@@ -50,10 +50,12 @@ services:
     build:
       context: ..
       dockerfile: frontend/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://192.168.1.5:8010}
     ports:
       - "5174:5173"
     environment:
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://backend:8010}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://192.168.1.5:8010}
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:5173/ >/dev/null"]
