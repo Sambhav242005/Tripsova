@@ -8,7 +8,7 @@ import type { DestinationResponse, PlaceResponse, PaginatedList } from "./types"
 const API_BASE =
   process.env.API_URL_INTERNAL ||
   process.env.NEXT_PUBLIC_API_URL ||
-  "http://localhost:8000";
+  "";
 
 // Periodically revalidate server-rendered content (ISR).
 const REVALIDATE_SECONDS = 300;
