@@ -1,0 +1,11 @@
+FROM postgres:16-bookworm
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    postgresql-16-postgis-3 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p /docker-entrypoint-initdb.d && \
+    echo "CREATE EXTENSION IF NOT EXISTS postgis;" > /docker-entrypoint-initdb.d/01-postgis.sql
+
+HEALTHCHECK --interval=5s --timeout=5s --retries=5 \
+    CMD pg_isready -U postgres

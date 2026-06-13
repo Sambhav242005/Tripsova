@@ -3,9 +3,12 @@ services:
     # PostGIS image (not plain postgres) — the app uses ST_DWithin / geography
     # functions for nearby search. The postgis extension is enabled by the
     # initial Alembic migration.
-    # Non-alpine variant has native ARM64 support (required for Raspberry Pi).
-    # The alpine tag is amd64-only and will fail on ARM64 hosts.
-    image: postgis/postgis:16-3.4
+    # Build locally — prebuilt postgis/postgis images lack ARM64 variants for v16.
+    # This Dockerfile starts from postgres:16-bookworm (native ARM64) and installs
+    # postgis via apt.
+    build:
+      context: .
+      dockerfile: Dockerfile.postgis
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
