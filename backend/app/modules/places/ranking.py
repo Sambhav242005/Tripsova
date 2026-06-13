@@ -12,27 +12,90 @@ from app.shared.sentiment import sentiment_to_score, aggregate_sentiment
 from app.shared.utils import clamp
 
 
+def review_confidence_score(review_count: int | None) -> float | None:
+    if review_count is None:
+        return None
+    return min(100, log10(review_count + 1) / log10(10000) * 100)
+
+
+def popularity_score(rating: float | None, review_count: int | None) -> float:
+    confidence = review_confidence_score(review_count)
+    if rating is not None and confidence is not None:
+        return rating * 0.60 + confidence * 0.40
+    elif rating is not None:
+        return rating
+    elif confidence is not None:
+        return confidence
+    return 0
+
+
+def freshness_score_from_days(days_since: int | None) -> int:
+    if days_since is None:
+        return 0
+    if days_since <= 30:
+        return 100
+    elif days_since <= 90:
+        return 60
+    elif days_since <= 180:
+        return 30
+    return 10
+
+
+def compose_final_score(
+    popularity: float,
+    trust_score: float,
+    traveller_verification_score: float,
+    freshness_score: float,
+    sentiment_score: float,
+    food_score: float,
+    safety_score: float,
+    report_count: int = 0,
+    rating_score: float | None = None,
+    last_verified_days: int | None = None,
+) -> tuple[float, list[str]]:
+    penalties: list[str] = []
+    score = (
+        (popularity or 0) * 0.25
+        + trust_score * 0.25
+        + traveller_verification_score * 0.20
+        + freshness_score * 0.10
+        + sentiment_score * 0.10
+        + food_score * 0.05
+        + safety_score * 0.05
+    )
+
+    if report_count > 5:
+        penalty = 15
+        score -= penalty
+        penalties.append(f"High report count ({report_count}) — penalized {penalty} points")
+
+    if safety_score < 30:
+        penalty = 10
+        score -= penalty
+        penalties.append("Recent safety warning — penalized 10 points")
+
+    if rating_score is not None and rating_score < 40:
+        penalty = 5
+        score -= penalty
+        penalties.append("Very low source confidence — penalized 5 points")
+
+    if last_verified_days is not None and last_verified_days > 365:
+        penalty = 10
+        score -= penalty
+        penalties.append("Stale data (>365 days since verification) — penalized 10 points")
+
+    return clamp(score, 0, 100), penalties
+
+
 async def calculate_tripova_score(db: AsyncSession, place: Place) -> dict:
     rating = place.external_rating
     review_count = place.external_review_count
     last_verified_at = place.last_verified_at
     place_id = str(place.id)
-    penalties = []
 
     external_rating_score = rating if rating is not None else None
-
-    review_confidence = None
-    if review_count is not None:
-        review_confidence = min(100, log10(review_count + 1) / log10(10000) * 100)
-
-    if external_rating_score is not None and review_confidence is not None:
-        popularity_score = external_rating_score * 0.60 + review_confidence * 0.40
-    elif external_rating_score is not None:
-        popularity_score = external_rating_score
-    elif review_confidence is not None:
-        popularity_score = review_confidence
-    else:
-        popularity_score = 0
+    review_confidence = review_confidence_score(review_count)
+    popularity = popularity_score(rating, review_count)
 
     trust_result = await db.execute(
         select(func.coalesce(func.sum(TrustEvent.score_delta), 0))
@@ -66,19 +129,8 @@ async def calculate_tripova_score(db: AsyncSession, place: Place) -> dict:
     )
 
     now = datetime.now(timezone.utc)
-    freshness_score = 0
-    if last_verified_at is not None:
-        days_since = (now - last_verified_at).days
-        if days_since <= 30:
-            freshness_score = 100
-        elif days_since <= 90:
-            freshness_score = 60
-        elif days_since <= 180:
-            freshness_score = 30
-        else:
-            freshness_score = 10
-    else:
-        freshness_score = 0
+    days_since_verified = (now - last_verified_at).days if last_verified_at is not None else None
+    freshness_score = freshness_score_from_days(days_since_verified)
 
     food_score = min(100, verification_count * 20)
 
@@ -111,42 +163,21 @@ async def calculate_tripova_score(db: AsyncSession, place: Place) -> dict:
     else:
         sentiment_score = 50
 
-    finalScore = (
-        (popularity_score or 0) * 0.25
-        + trust_score * 0.25
-        + traveller_verification_score * 0.20
-        + freshness_score * 0.10
-        + sentiment_score * 0.10
-        + food_score * 0.05
-        + safety_score * 0.05
+    finalScore, penalties = compose_final_score(
+        popularity=popularity,
+        trust_score=trust_score,
+        traveller_verification_score=traveller_verification_score,
+        freshness_score=freshness_score,
+        sentiment_score=sentiment_score,
+        food_score=food_score,
+        safety_score=safety_score,
+        report_count=report_count,
+        rating_score=external_rating_score,
+        last_verified_days=days_since_verified,
     )
 
-    if report_count > 5:
-        penalty = 15
-        finalScore -= penalty
-        penalties.append(f"High report count ({report_count}) — penalized {penalty} points")
-
-    if safety_score < 30:
-        penalty = 10
-        finalScore -= penalty
-        penalties.append("Recent safety warning — penalized 10 points")
-
-    if external_rating_score is not None and external_rating_score < 40:
-        penalty = 5
-        finalScore -= penalty
-        penalties.append("Very low source confidence — penalized 5 points")
-
-    if last_verified_at is not None:
-        days_since = (now - last_verified_at).days
-        if days_since > 365:
-            penalty = 10
-            finalScore -= penalty
-            penalties.append("Stale data (>365 days since verification) — penalized 10 points")
-
-    finalScore = clamp(finalScore, 0, 100)
-
     explanation_parts = []
-    if popularity_score and popularity_score > 60:
+    if popularity and popularity > 60:
         if rating is not None and review_count is not None:
             explanation_parts.append(
                 f"This place has strong popularity because it has {rating} rating "
@@ -154,7 +185,7 @@ async def calculate_tripova_score(db: AsyncSession, place: Place) -> dict:
             )
         elif rating is not None:
             explanation_parts.append(f"This place has a {rating} rating")
-    elif popularity_score and popularity_score < 30:
+    elif popularity and popularity < 30:
         explanation_parts.append("Popularity is low due to limited rating data")
 
     if traveller_verification_score < 30:
@@ -184,7 +215,7 @@ async def calculate_tripova_score(db: AsyncSession, place: Place) -> dict:
         "finalScore": round(finalScore, 2),
         "ratingScore": round(external_rating_score, 2) if external_rating_score is not None else None,
         "reviewConfidence": round(review_confidence, 2) if review_confidence is not None else None,
-        "popularityScore": round(popularity_score, 2),
+        "popularityScore": round(popularity, 2),
         "trustScore": round(trust_score, 2),
         "travellerVerificationScore": round(traveller_verification_score, 2),
         "freshnessScore": round(freshness_score, 2),

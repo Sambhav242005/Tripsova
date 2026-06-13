@@ -8,6 +8,7 @@ import { Card, Btn } from "../primitives/index";
 import { Icon } from "../icon";
 import { TrustBadge, MultiSelectFood } from "../badges/index";
 import { api, isAuthenticated, ApiError } from "@/lib/api";
+import { useAuth } from "../auth/auth-context";
 import type { UserResponse, TrustScoreResponse } from "@/lib/types";
 
 function getInitials(name: string): string {
@@ -60,6 +61,7 @@ function parseTrustComponents(components: Record<string, unknown>, t: Theme): Tr
 }
 
 export function ProfileScreen({ t, lang, setLang, go }: { t: Theme; lang: string; setLang: (l: string) => void; go: (id: string) => void }) {
+  const { logout } = useAuth();
   const [myFoods, setMyFoods] = useState(["jain", "pure_veg"]);
   const [user, setUser] = useState<UserResponse | null>(null);
   const [trustScore, setTrustScore] = useState<TrustScoreResponse | null>(null);
@@ -129,7 +131,9 @@ export function ProfileScreen({ t, lang, setLang, go }: { t: Theme; lang: string
         { label: "Community Standing", score: 13, max: 20, color: t.warning },
       ];
   const manage = [
+    { id: "journey", icon: "Navigation", label: "Plan My Journey" },
     { id: "plan", icon: "Sparkles", label: "AI Trip Builder" },
+    { id: "route", icon: "Route", label: "Route Planner" },
     { id: "guides", icon: "Map", label: "Local Guides" },
     { id: "family", icon: "Users", label: "Family Circle" },
     { id: "budget", icon: "Wallet", label: "Budget Tracker" },
@@ -257,6 +261,18 @@ export function ProfileScreen({ t, lang, setLang, go }: { t: Theme; lang: string
           </div>
         ))}
       </Card>
+
+      <button
+        onClick={logout}
+        style={{
+          width: "100%", marginTop: 16, padding: "13px", borderRadius: 12,
+          border: `1px solid ${t.danger}40`, background: t.danger + "10", color: t.danger,
+          fontSize: 15, fontWeight: 700, cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+        }}
+      >
+        <Icon name="LogOut" size={17} color={t.danger} /> Log out
+      </button>
     </div>
   );
 }

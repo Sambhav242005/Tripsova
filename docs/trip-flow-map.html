@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Tripsova — Trip Creation Road Map</title>
+<style>
+  :root{
+    --bg:#0a0f1f; --panel:#131b30; --panel2:#1a2440; --line:#2a3760; --line2:#3a4a7d;
+    --text:#e9eeff; --muted:#93a3cc; --rail:#33406e;
+    --action:#5b8cff; --choice:#33d6a6; --decision:#ffb020; --outcome:#a78bfa; --stop:#ff6b9d;
+    --land:#5b8cff; --air:#a78bfa; --water:#33b6d6; --fuel:#ffb020;
+    --dim:.28;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 50% -10%,#101a36,#0a0f1f 60%);
+    color:var(--text);font:14px/1.5 "Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  header{padding:24px 26px 16px;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:30;
+    background:rgba(10,15,31,.93);backdrop-filter:blur(8px)}
+  h1{margin:0;font-size:21px}
+  h1 b{color:var(--choice)}
+  .sub{color:var(--muted);font-size:13px;margin-top:4px}
+  .wrap{max-width:980px;margin:0 auto;padding:26px 18px 100px}
+  /* scenario presets */
+  .scen{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;align-items:center}
+  .scen .lab{color:var(--muted);font-size:12px;margin-right:4px}
+  .sbtn{padding:7px 13px;border:1px solid var(--line);border-radius:20px;background:var(--panel);
+    color:var(--muted);cursor:pointer;font-weight:600;font-size:12.5px;transition:.15s}
+  .sbtn:hover{border-color:var(--line2);color:var(--text)}
+  .sbtn.active{background:var(--choice);color:#04261b;border-color:var(--choice)}
+  /* legend */
+  .legend{display:flex;gap:14px;flex-wrap:wrap;margin:18px 0 6px;color:var(--muted);font-size:12px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .dot{width:11px;height:11px;border-radius:50%}
+  /* flow */
+  .flow{position:relative;margin-top:10px}
+  .phase{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);
+    margin:26px 0 12px;display:flex;align-items:center;gap:10px}
+  .phase::after{content:"";flex:1;height:1px;background:var(--line)}
+  /* node */
+  .node{position:relative;margin:0 auto;max-width:560px;background:var(--panel);border:1px solid var(--line);
+    border-radius:14px;padding:14px 16px;transition:.18s}
+  .node .ico{position:absolute;left:-13px;top:16px;width:26px;height:26px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;font-size:13px;border:2px solid var(--bg)}
+  .node h3{margin:0;font-size:15px;display:flex;align-items:center;gap:8px}
+  .node p{margin:6px 0 0;color:var(--muted);font-size:13px}
+  .node.action{border-left:3px solid var(--action)} .action .ico{background:var(--action);color:#06122e}
+  .node.choice{border-left:3px solid var(--choice)} .choice .ico{background:var(--choice);color:#04261b}
+  .node.decision{border-left:3px solid var(--decision);background:#1c1a12}
+  .decision .ico{background:var(--decision);color:#241a05}
+  .node.outcome{border-left:3px solid var(--outcome)} .outcome .ico{background:var(--outcome);color:#1a0f33}
+  .node.start{border:1px solid var(--choice);background:linear-gradient(135deg,#0e2a22,#13243f);text-align:center;max-width:340px}
+  .node.finish{border:1px solid var(--stop);background:linear-gradient(135deg,#2a0f1d,#13243f);text-align:center;max-width:380px}
+  .rail{width:2px;height:22px;background:var(--rail);margin:0 auto}
+  .rail.tall{height:30px}
+  /* option chips inside a choice */
+  .opts{display:flex;gap:8px;flex-wrap:wrap;margin-top:11px}
+  .opt{flex:1;min-width:120px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;
+    padding:9px 11px;font-size:12.5px;transition:.18s}
+  .opt b{display:block;font-size:13px;margin-bottom:2px}
+  .opt small{color:var(--muted)}
+  .opt.land b{color:var(--land)} .opt.air b{color:var(--air)} .opt.water b{color:var(--water)}
+  /* decision branches: two/three cases side by side */
+  .cases{display:flex;gap:14px;margin-top:6px;align-items:stretch;flex-wrap:wrap}
+  .case{flex:1;min-width:200px;position:relative;background:var(--panel);border:1px solid var(--line);
+    border-radius:12px;padding:12px 14px;transition:.18s}
+  .case .flag{font-size:10.5px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;
+    padding:2px 9px;border-radius:6px;display:inline-block;margin-bottom:7px}
+  .case.yes .flag{background:#0e2a22;color:var(--choice);border:1px solid #1e5a47}
+  .case.no .flag{background:#2a0f1d;color:var(--stop);border:1px solid #5a2740}
+  .case.alt .flag{background:#1a1430;color:var(--air);border:1px solid #3c2f63}
+  .case h4{margin:0 0 4px;font-size:13.5px}
+  .case p{margin:0;color:var(--muted);font-size:12.5px}
+  .case .tail{margin-top:8px;font-size:12px;color:var(--text);background:var(--panel2);
+    border-radius:8px;padding:7px 9px;border:1px solid var(--line)}
+  .merge{text-align:center;color:var(--muted);font-size:12px;margin:14px 0 2px}
+  /* the overnight 3-way fork — hero of the road map */
+  .stopnode{max-width:620px;border:1px solid var(--stop);background:linear-gradient(160deg,#241024,#13243f)}
+  .stopnode .ico{background:var(--stop);color:#2a0414}
+  .forks{display:flex;gap:12px;margin-top:12px;flex-wrap:wrap}
+  .fork{flex:1;min-width:150px;background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:12px;transition:.18s}
+  .fork .fi{font-size:22px}
+  .fork b{display:block;margin:6px 0 3px;font-size:13.5px}
+  .fork small{color:var(--muted);font-size:12px}
+  .fork.hotel{border-color:#28407e} .fork.rel{border-color:#1e5a47} .fork.cont{border-color:#5c441a}
+  .loopback{display:flex;align-items:center;gap:8px;justify-content:center;color:var(--decision);
+    font-size:12.5px;margin-top:12px;font-weight:600}
+  /* dim/highlight for scenarios */
+  .dimmed{opacity:var(--dim);filter:grayscale(.4)}
+  .glow{box-shadow:0 0 0 2px var(--choice), 0 6px 24px rgba(51,214,166,.15)}
+  .note{max-width:560px;margin:14px auto 0;color:var(--muted);font-size:12px;text-align:center;font-style:italic}
+  .foot{color:var(--muted);font-size:12px;margin-top:30px;text-align:center}
+</style>
+</head>
+<body>
+<header>
+  <h1>Tripsova — How a Trip Gets Created <b>· Road Map</b></h1>
+  <div class="sub">Every step the traveller takes, and every case the system branches into. Pick a scenario to trace one real journey.</div>
+  <div class="scen">
+    <span class="lab">Trace a scenario:</span>
+    <button class="sbtn active" data-s="all">Show all cases</button>
+    <button class="sbtn" data-s="land">🚗 Solo road trip (LAND + AI)</button>
+    <button class="sbtn" data-s="air">✈️ Overseas trip (AIR)</button>
+    <button class="sbtn" data-s="water">🚢 Island hop (WATER)</button>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="legend">
+    <span><i class="dot" style="background:var(--action)"></i> User action</span>
+    <span><i class="dot" style="background:var(--choice)"></i> User choice</span>
+    <span><i class="dot" style="background:var(--decision)"></i> System decision</span>
+    <span><i class="dot" style="background:var(--outcome)"></i> Outcome</span>
+    <span><i class="dot" style="background:var(--stop)"></i> Stop / finish</span>
+  </div>
+
+  <div class="flow">
+
+    <!-- ====== PHASE 1: THE FORM ====== -->
+    <div class="phase">Phase 1 · The traveller builds the trip</div>
+
+    <div class="node start"><h3 style="justify-content:center">🧭 Open “Build My Trip”</h3></div>
+    <div class="rail"></div>
+
+    <div class="node action"><div class="ico">1</div>
+      <h3>Enter destination, days &amp; budget</h3>
+      <p>e.g. “Manali · 4 days · ₹10,000”. Budget later splits into stay / food / activities / transport.</p>
+    </div>
+    <div class="rail"></div>
+
+    <div class="node choice"><div class="ico">2</div>
+      <h3>Choose group type</h3>
+      <p>This sets head-count and shifts the budget split.</p>
+      <div class="opts">
+        <div class="opt"><b>🧍 Solo</b><small>1 person · safety tips added</small></div>
+        <div class="opt"><b>👫 Couple</b><small>2 people</small></div>
+        <div class="opt"><b>👨‍👩‍👧 Family</b><small>4 · more on stay</small></div>
+        <div class="opt"><b>👯 Friends</b><small>4 · more on activities</small></div>
+      </div>
+    </div>
+    <div class="rail"></div>
+
+    <div class="node choice" id="modechoice"><div class="ico">3</div>
+      <h3>Choose transport <small style="color:var(--muted);font-weight:400">— each one behaves differently</small></h3>
+      <p>Two questions decide the logic: <b>do you refuel it?</b> (only self-driven petrol vehicles) and <b>do you sleep off the vehicle?</b> (only self-driven road travel). Medium (land/air/water) is just the icon.</p>
+      <div class="opts" style="flex-wrap:wrap">
+        <div class="opt land" data-case="land"><b>🚗 Car</b><small>⛽ fuel + 🌙 overnight stops</small></div>
+        <div class="opt land" data-case="land"><b>🏍️ Motorcycle</b><small>⛽ fuel (every ~250 km) + 🌙 overnight</small></div>
+        <div class="opt land" data-case="train"><b>🚆 Train</b><small>land, but no fuel, no roadside sleep</small></div>
+        <div class="opt land" data-case="train"><b>🚌 Bus</b><small>scheduled — single segment</small></div>
+        <div class="opt land" data-case="cycle"><b>🚲 Bicycle / 🚶 Walk</b><small>🌙 overnight rest, but never refuels</small></div>
+        <div class="opt air" data-case="air"><b>✈️ Flight</b><small>single hop — no fuel/overnight</small></div>
+        <div class="opt water" data-case="water"><b>⛴️ Ferry / 🛳️ Cruise</b><small>single hop — sleep on board</small></div>
+      </div>
+      <div style="margin-top:11px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:12.5px">
+        <b>🗾 A real trip mixes transports.</b> You can now give multiple <b>legs</b>, each with its own transport — e.g.
+        Mumbai <b>✈️ Flight</b> Tokyo → <b>🚆 Train</b> Kyoto → <b>🚗 Car</b> Nara. Only the <b>Car</b> leg gets fuel + overnight stops; the flight & train are clean scheduled segments. See Phase 4.
+      </div>
+    </div>
+    <div class="rail"></div>
+
+    <div class="node action"><div class="ico">4</div>
+      <h3>Pick interests &amp; diet</h3>
+      <p>Adventure · Nature · Food · Culture … and diet (Pure-veg, Jain, Vegan…). These steer which places &amp; restaurants get picked.</p>
+    </div>
+    <div class="rail"></div>
+
+    <div class="node start" style="border-color:var(--action);background:linear-gradient(135deg,#101a38,#13243f)">
+      <h3 style="justify-content:center">✦ Tap “Build My Trip” → <code>POST /api/trips/generate</code></h3>
+    </div>
+
+    <!-- ====== PHASE 2: SYSTEM DECISIONS ====== -->
+    <div class="phase">Phase 2 · The system decides (this is where each case branches)</div>
+
+    <div class="node decision"><div class="ico">?</div>
+      <h3>Is the destination in our database?</h3>
+      <div class="cases">
+        <div class="case yes"><div class="flag">Case · Found</div>
+          <h4>Load real places &amp; score them</h4>
+          <p>Attractions, food, hotels for that city are pulled and ranked by your interests + diet.</p>
+          <div class="tail">⛽ Petrol pumps are split off here — never shown as “things to see”.</div>
+        </div>
+        <div class="case no"><div class="flag">Case · Not found</div>
+          <h4>Generic exploration plan</h4>
+          <p>A sensible day-by-day “explore the area” itinerary is built so you still get a usable plan.</p>
+        </div>
+      </div>
+    </div>
+    <div class="merge">↓ either way, a rule-based plan now exists ↓</div>
+    <div class="rail"></div>
+
+    <div class="node decision"><div class="ico">?</div>
+      <h3>Is the AI (OpenRouter) key configured?</h3>
+      <div class="cases">
+        <div class="case yes" data-case="ai"><div class="flag">Case · AI on</div>
+          <h4>AI rewrites the itinerary</h4>
+          <p>The pre-scored places + your profile go to OpenRouter, which writes a richer day-by-day plan.</p>
+          <div class="tail">✓ AI replies → polished itinerary (<b>aiGenerated: true</b>)<br>✗ AI errors → silently falls back to the rule-based plan</div>
+        </div>
+        <div class="case no"><div class="flag">Case · AI off</div>
+          <h4>Rule-based itinerary</h4>
+          <p>The deterministic planner’s itinerary is used as-is (<b>aiGenerated: false</b>).</p>
+        </div>
+      </div>
+    </div>
+    <div class="merge">↓ itinerary, budget breakdown &amp; safety notes are ready ↓</div>
+    <div class="rail"></div>
+
+    <div class="node decision" id="fueldecision"><div class="ico">?</div>
+      <h3>Is the travel mode <b>LAND</b>?</h3>
+      <div class="cases">
+        <div class="case yes" data-case="land"><div class="flag">Case · LAND</div>
+          <h4>⛽ Show “Fuel Stops Nearby”</h4>
+          <p>Real petrol pumps (from OpenStreetMap) around the destination are listed with name, address &amp; phone.</p>
+        </div>
+        <div class="case alt" data-case="airwater"><div class="flag">Case · AIR / WATER</div>
+          <h4>No fuel card</h4>
+          <p>Fuel stops don’t apply mid-flight or at sea — the card is hidden entirely.</p>
+        </div>
+      </div>
+    </div>
+    <div class="rail tall"></div>
+
+    <div class="node finish"><h3 style="justify-content:center">🎉 Trip plan shown to the traveller</h3>
+      <p style="text-align:center">Day-by-day itinerary · budget split · safety tips · ⛽ fuel stops (LAND only)</p>
+    </div>
+
+    <!-- ====== PHASE 3: THE ROAD MAP (route-plan) ====== -->
+    <div class="phase" data-case="land" id="phase3">Phase 3 · The actual road map · <code>POST /api/trips/route-plan</code></div>
+    <div class="note" data-case="land">This is the “map with time” journey — how long it takes, and where you’ll need to stop for the night.</div>
+    <div class="rail" data-case="land"></div>
+
+    <div class="node start" data-case="land" style="max-width:420px"><h3 style="justify-content:center">📍 Origin → 📍 Destination + mode</h3></div>
+    <div class="rail" data-case="land"></div>
+
+    <div class="node decision" data-case="land"><div class="ico">?</div>
+      <h3>Which travel mode?</h3>
+      <div class="cases">
+        <div class="case alt" data-case="airwater"><div class="flag">AIR / WATER</div>
+          <h4>One continuous leg ✈️🚢</h4>
+          <p>Departure → arrival in a single segment. <b>No overnight stops, no fuel</b> — just a note that road stops don’t apply.</p>
+        </div>
+        <div class="case yes" data-case="landonly"><div class="flag">LAND</div>
+          <h4>Simulate driving days 🚗</h4>
+          <p>Drive until ~20:00 (max 9h/day), interpolating your position &amp; clock time for the map timeline.</p>
+        </div>
+      </div>
+    </div>
+    <div class="rail" data-case="land"></div>
+
+    <div class="node decision" data-case="land"><div class="ico">?</div>
+      <h3>Reached the destination before nightfall?</h3>
+      <div class="cases">
+        <div class="case yes"><div class="flag">Case · Yes</div>
+          <h4>🏁 Arrive</h4>
+          <p>Journey complete — arrival time shown on the timeline.</p>
+        </div>
+        <div class="case no"><div class="flag">Case · No</div>
+          <h4>🌙 Time to stop for the night</h4>
+          <p>The system finds the nearest city on the route and offers where to stay.</p>
+        </div>
+      </div>
+    </div>
+    <div class="rail" data-case="land"></div>
+
+    <!-- the 3-way overnight fork the user specifically asked about -->
+    <div class="node stopnode" data-case="land"><div class="ico">🌙</div>
+      <h3>Overnight stop · nearest city on the route</h3>
+      <p>You choose what to do — each option is shown so you can just tap one:</p>
+      <div class="forks">
+        <div class="fork hotel"><div class="fi">🏨</div><b>Book a hotel</b>
+          <small>Real hotels &amp; homestays in that city, best-rated first — tap to book.</small></div>
+        <div class="fork rel"><div class="fi">🏠</div><b>Stay with relatives</b>
+          <small>Friends or family who live nearby — no booking needed.</small></div>
+        <div class="fork cont"><div class="fi">🚗</div><b>Keep driving</b>
+          <small>Push through the night (flagged as not recommended).</small></div>
+      </div>
+      <div class="loopback">⟳ Resume at 08:00 next morning → back to driving until you arrive</div>
+    </div>
+    <div class="note" data-case="land">⛽ Independently of stops, a fuel break is suggested every ~450 km with its location &amp; estimated time.</div>
+    <div class="rail tall" data-case="land"></div>
+
+    <div class="node finish" data-case="land"><h3 style="justify-content:center">🏁 Full road map delivered</h3>
+      <p style="text-align:center">Day segments with coordinates &amp; times · overnight stops with options · fuel breaks</p>
+    </div>
+
+    <!-- ====== PHASE 4: MULTI-LEG ====== -->
+    <div class="phase">Phase 4 · Multi-leg journeys · one trip, many transports</div>
+    <div class="note">A real international trip isn’t one mode. You pass a list of <b>legs</b>; each leg is planned with its own transport’s rules, and the clock chains (each leg departs when the previous arrives).</div>
+    <div class="rail"></div>
+
+    <div class="node start" style="max-width:480px"><h3 style="justify-content:center">🗾 Example: Mumbai → Tokyo → Kyoto → Nara</h3></div>
+    <div class="rail"></div>
+
+    <div class="node outcome"><div class="ico">✈️</div>
+      <h3>Leg 1 · Flight — Mumbai → Tokyo</h3>
+      <p>Single continuous segment. <b>No fuel, no overnight road stop.</b> Arrival time becomes Leg 2’s departure.</p>
+    </div>
+    <div class="rail"></div>
+    <div class="node outcome"><div class="ico">🚆</div>
+      <h3>Leg 2 · Train — Tokyo → Kyoto</h3>
+      <p>Land, but scheduled: one clean segment. Still no fuel, no roadside sleep — you’re a passenger.</p>
+    </div>
+    <div class="rail"></div>
+    <div class="node outcome" style="border-left-color:var(--decision)"><div class="ico" style="background:var(--decision);color:#241a05">🚗</div>
+      <h3>Leg 3 · Car — Kyoto → Nara</h3>
+      <p><b>Only this leg</b> runs the driving-day logic: ⛽ fuel stops and 🌙 overnight choices (book hotel / stay with relatives / keep going) apply here — and nowhere else in the trip.</p>
+    </div>
+    <div class="rail tall"></div>
+    <div class="node finish"><h3 style="justify-content:center">🏁 One timeline · ✈️ 🚆 🚗 stitched together</h3>
+      <p style="text-align:center">Each leg tagged with its transport · fuel &amp; overnight only on the self-driven leg</p>
+    </div>
+
+  </div>
+
+  <div class="foot">Tripsova trip-creation journey · open in any browser · click a scenario above to trace one path</div>
+</div>
+
+<script>
+/* Scenario tracing: dim everything that doesn't belong to the chosen path. */
+const SCENARIOS = {
+  all:   null, // show everything at full strength
+  land:  new Set(["land","landonly","ai"]),          // road trip: land cases + AI on
+  air:   new Set(["air","airwater"]),                // overseas flight
+  water: new Set(["water","airwater"])               // island hop by ferry
+};
+
+function applyScenario(key){
+  const set = SCENARIOS[key];
+  // elements that carry a data-case attribute participate in filtering
+  document.querySelectorAll("[data-case]").forEach(el=>{
+    const c = el.getAttribute("data-case");
+    if(set === null){ el.classList.remove("dimmed","glow"); return; }
+    const match = set.has(c);
+    el.classList.toggle("dimmed", !match);
+    el.classList.toggle("glow", match);
+  });
+  // Phase 3 (road map) only makes sense for LAND
+  const landPath = (key==="land");
+  document.querySelectorAll('#phase3, [data-case="land"]').forEach(el=>{
+    if(key==="all"){ el.style.display=""; return; }
+    el.style.display = landPath ? "" : "none";
+  });
+}
+
+document.querySelectorAll(".sbtn").forEach(b=>b.addEventListener("click",()=>{
+  document.querySelectorAll(".sbtn").forEach(x=>x.classList.remove("active"));
+  b.classList.add("active");
+  applyScenario(b.dataset.s);
+}));
+
+applyScenario("all");
+</script>
+</body>
+</html>

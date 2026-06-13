@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -6,6 +7,13 @@ from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.database import init_db, close_db
+from app.shared.rate_limit import RateLimitMiddleware
+from app.shared.request_logging import RequestLoggingMiddleware
+
+logging.basicConfig(
+    level=logging.DEBUG if settings.DEBUG else logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
 
 from app.modules.auth.routes import router as auth_router
 from app.modules.users.routes import router as users_router
@@ -34,25 +42,33 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    description="Tripova API — Powered by Travellers",
+    description="Tripsova API — Powered by Travellers",
     lifespan=lifespan,
     docs_url="/docs",
 )
 
+app.add_middleware(RateLimitMiddleware)
+
+app.add_middleware(RequestLoggingMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
+logger = logging.getLogger("tripsova")
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
+    logger.exception("Unhandled error on %s %s", request.method, request.url.path)
     return JSONResponse(
         status_code=500,
-        content={"detail": "Internal server error", "message": str(exc) if settings.DEBUG else None},
+        content={"detail": "Internal server error"},
     )
 
 

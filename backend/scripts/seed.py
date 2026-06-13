@@ -36,7 +36,7 @@ def slugify(text: str) -> str:
 async def _create_users(session: AsyncSession) -> dict[str, User]:
     admin = User(
         name="Admin User",
-        email="admin@tripova.com",
+        email="admin@tripsova.com",
         password_hash=hash_password("password123"),
         role=UserRole.ADMIN.value,
         verification_status=VerificationStatus.ID_VERIFIED.value,
@@ -46,7 +46,7 @@ async def _create_users(session: AsyncSession) -> dict[str, User]:
     )
     traveller = User(
         name="Traveller Tina",
-        email="traveller@tripova.com",
+        email="traveller@tripsova.com",
         password_hash=hash_password("password123"),
         role=UserRole.USER.value,
         verification_status=VerificationStatus.EMAIL_VERIFIED.value,
@@ -56,7 +56,7 @@ async def _create_users(session: AsyncSession) -> dict[str, User]:
     )
     partner_user = User(
         name="Partner Paul",
-        email="partner@tripova.com",
+        email="partner@tripsova.com",
         password_hash=hash_password("password123"),
         role=UserRole.LOCAL_PARTNER.value,
         verification_status=VerificationStatus.PHONE_VERIFIED.value,
@@ -67,9 +67,9 @@ async def _create_users(session: AsyncSession) -> dict[str, User]:
     session.add_all([admin, traveller, partner_user])
     await session.flush()
     return {
-        "admin@tripova.com": admin,
-        "traveller@tripova.com": traveller,
-        "partner@tripova.com": partner_user,
+        "admin@tripsova.com": admin,
+        "traveller@tripsova.com": traveller,
+        "partner@tripsova.com": partner_user,
     }
 
 
@@ -556,9 +556,9 @@ async def _create_all_places(session: AsyncSession, destinations: dict[str, Dest
 async def _create_food_verifications(session: AsyncSession, users: dict[str, User], all_places: list[Place]):
     food_places = [p for p in all_places if p.type in ("RESTAURANT", "CAFE")]
     place_map = {p.slug: p for p in food_places}
-    admin = users["admin@tripova.com"]
-    traveller = users["traveller@tripova.com"]
-    partner = users["partner@tripova.com"]
+    admin = users["admin@tripsova.com"]
+    traveller = users["traveller@tripsova.com"]
+    partner = users["partner@tripsova.com"]
 
     verifications = [
         FoodVerification(place_id=place_map["sharma-ji-ka-dhaba"].id, user_id=admin.id, diet_tag="PURE_VEG",
@@ -603,9 +603,9 @@ async def _create_food_verifications(session: AsyncSession, users: dict[str, Use
 
 
 async def _create_feed_posts(session: AsyncSession, users: dict[str, User], destinations: dict[str, Destination]):
-    admin = users["admin@tripova.com"]
-    traveller = users["traveller@tripova.com"]
-    partner = users["partner@tripova.com"]
+    admin = users["admin@tripsova.com"]
+    traveller = users["traveller@tripsova.com"]
+    partner = users["partner@tripsova.com"]
 
     posts = [
         FeedPost(
@@ -725,9 +725,9 @@ async def _create_feed_posts(session: AsyncSession, users: dict[str, User], dest
 
 
 async def _create_trip_pods(session: AsyncSession, users: dict[str, User], destinations: dict[str, Destination]):
-    admin = users["admin@tripova.com"]
-    traveller = users["traveller@tripova.com"]
-    partner = users["partner@tripova.com"]
+    admin = users["admin@tripsova.com"]
+    traveller = users["traveller@tripsova.com"]
+    partner = users["partner@tripsova.com"]
 
     pod1 = TripPod(
         creator_id=admin.id,
@@ -784,8 +784,8 @@ async def _create_trip_pods(session: AsyncSession, users: dict[str, User], desti
 
 
 async def _create_partners(session: AsyncSession, users: dict[str, User], destinations: dict[str, Destination]):
-    partner_user = users["partner@tripova.com"]
-    admin = users["admin@tripova.com"]
+    partner_user = users["partner@tripsova.com"]
+    admin = users["admin@tripsova.com"]
 
     p1 = Partner(
         user_id=admin.id,
@@ -850,9 +850,9 @@ async def _create_listings(session: AsyncSession, all_places: list[Place]):
 
 
 async def _create_trust_events(session: AsyncSession, users: dict[str, User]):
-    admin = users["admin@tripova.com"]
-    traveller = users["traveller@tripova.com"]
-    partner = users["partner@tripova.com"]
+    admin = users["admin@tripsova.com"]
+    traveller = users["traveller@tripsova.com"]
+    partner = users["partner@tripsova.com"]
 
     events = [
         TrustEvent(entity_type="USER", entity_id=str(admin.id), event_type="ACCOUNT_CREATED", score_delta=10.0,

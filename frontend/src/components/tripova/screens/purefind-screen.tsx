@@ -42,7 +42,7 @@ function apiToPlace(p: FoodPlaceResponse, idx: number) {
     verifiedBy,
     rating: Math.round(p.food_score * 10) / 10,
     reviews: Math.max(1, Math.round(p.food_score * 30 + (p.verified_count || 0) * 2)),
-    tags: dietTags.map(t => getFI(t).label),
+    tags: Array.from(new Set(dietTags.map(t => getFI(t).label))),
     distance: "—",
     lastVerified: "—",
     gradient: GRADIENTS[idx % GRADIENTS.length],

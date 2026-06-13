@@ -8,9 +8,7 @@ from app.shared.errors import UnauthorizedError, ForbiddenError
 from app.config import settings
 
 
-async def get_current_user_id(
-    authorization: str = Header(None),
-) -> str:
+def _decode_bearer_token(authorization: str | None) -> dict:
     if not authorization:
         raise UnauthorizedError("Missing authorization header")
     scheme, _, token = authorization.partition(" ")
@@ -19,21 +17,19 @@ async def get_current_user_id(
     payload = decode_access_token(token)
     if payload is None:
         raise UnauthorizedError("Invalid or expired token")
-    return payload.get("sub")
+    return payload
+
+
+async def get_current_user_id(
+    authorization: str = Header(None),
+) -> str:
+    return _decode_bearer_token(authorization).get("sub")
 
 
 async def get_current_user_role(
     authorization: str = Header(None),
 ) -> str:
-    if not authorization:
-        raise UnauthorizedError("Missing authorization header")
-    scheme, _, token = authorization.partition(" ")
-    if scheme.lower() != "bearer" or not token:
-        raise UnauthorizedError("Invalid authorization scheme")
-    payload = decode_access_token(token)
-    if payload is None:
-        raise UnauthorizedError("Invalid or expired token")
-    return payload.get("role", "USER")
+    return _decode_bearer_token(authorization).get("role", "USER")
 
 
 async def require_admin(

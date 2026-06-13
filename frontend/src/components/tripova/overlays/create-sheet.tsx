@@ -128,7 +128,7 @@ export function CreateSheet({ open, onClose, t, onCreatePost, onCreatePod }: Cre
               <Icon name="Check" size={32} color={t.success} />
             </div>
             <div style={{ fontSize: 20, fontWeight: 700, color: t.heading, marginBottom: 6 }}>Shared with the community</div>
-            <div style={{ fontSize: 13.5, color: t.muted }}>Your contribution is now live on Tripova.</div>
+            <div style={{ fontSize: 13.5, color: t.muted }}>Your contribution is now live on Tripsova.</div>
           </div>
         ) : !mode ? (
           <>

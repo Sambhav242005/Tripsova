@@ -25,8 +25,8 @@ export function SectionTitle({
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={{ width: 3, height: 16, borderRadius: 2, background: t.gold, flexShrink: 0 }} />
-        <span style={{ fontSize: 12, fontWeight: 700, color: t.muted, letterSpacing: 1.2, textTransform: "uppercase" }}>
+        <span style={{ width: 3, height: 18, borderRadius: 2, background: t.gold, flexShrink: 0 }} />
+        <span style={{ fontFamily: "var(--font-dm-serif), Georgia, serif", fontSize: 18, fontWeight: 400, color: t.heading, letterSpacing: 0.2 }}>
           {children}
         </span>
       </div>

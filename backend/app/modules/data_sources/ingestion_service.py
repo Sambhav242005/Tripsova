@@ -13,10 +13,25 @@ from app.modules.data_sources.google_places_provider import GooglePlacesProvider
 from app.modules.data_sources.reddit_deep_review_provider import RedditDeepReviewProvider
 from app.modules.data_sources.weather_provider import WeatherProvider
 from app.shared.errors import NotFoundError
+from app.shared.utils import slugify
+import uuid as _uuid
+
+
+def _place_slug(name: str) -> str:
+    """Unique slug for an ingested place (slug column is NOT NULL)."""
+    return f"{slugify(name) or 'place'}-{_uuid.uuid4().hex[:8]}"
+
+
+def _to_uuid(value: str, label: str) -> _uuid.UUID:
+    """Coerce a path-param string to UUID; a malformed id can never match a row."""
+    try:
+        return _uuid.UUID(str(value))
+    except ValueError:
+        raise NotFoundError(f"{label} not found")
 
 
 async def sync_destination(db: AsyncSession, destination_id: str) -> dict:
-    result = await db.execute(select(Destination).where(Destination.id == destination_id))
+    result = await db.execute(select(Destination).where(Destination.id == _to_uuid(destination_id, "Destination")))
     destination = result.scalar_one_or_none()
     if not destination:
         raise NotFoundError("Destination not found")
@@ -45,7 +60,7 @@ async def sync_destination(db: AsyncSession, destination_id: str) -> dict:
 
 
 async def sync_places(db: AsyncSession, destination_id: str) -> dict:
-    result = await db.execute(select(Destination).where(Destination.id == destination_id))
+    result = await db.execute(select(Destination).where(Destination.id == _to_uuid(destination_id, "Destination")))
     destination = result.scalar_one_or_none()
     if not destination:
         raise NotFoundError("Destination not found")
@@ -84,7 +99,8 @@ async def sync_places(db: AsyncSession, destination_id: str) -> dict:
 
                 place = Place(
                     name=place_data["name"],
-                    destination_id=destination_id,
+                    slug=_place_slug(place_data["name"]),
+                    destination_id=destination.id,
                     latitude=place_data.get("lat"),
                     longitude=place_data.get("lng"),
                     external_rating=place_data.get("rating"),
@@ -107,8 +123,71 @@ async def sync_places(db: AsyncSession, destination_id: str) -> dict:
     }
 
 
+async def sync_fuel_stations(db: AsyncSession, destination_id: str, radius_m: int = 15000) -> dict:
+    """Ingest petrol pumps around a destination from OpenStreetMap (Overpass, amenity=fuel)."""
+    result = await db.execute(select(Destination).where(Destination.id == _to_uuid(destination_id, "Destination")))
+    destination = result.scalar_one_or_none()
+    if not destination:
+        raise NotFoundError("Destination not found")
+    if destination.latitude is None or destination.longitude is None:
+        raise NotFoundError("Destination has no coordinates to search around")
+
+    from app.modules.maps.osm import osm_provider
+
+    query = (
+        f"[out:json][timeout:25];"
+        f'node["amenity"="fuel"](around:{radius_m},{destination.latitude},{destination.longitude});'
+        f"out body 100;"
+    )
+    elements = await osm_provider.query_overpass(query)
+
+    created_count = 0
+    updated_count = 0
+    skipped_count = 0
+
+    for element in elements:
+        tags = element.get("tags", {}) or {}
+        name = tags.get("name") or tags.get("brand") or "Petrol Pump"
+        lat = element.get("lat")
+        lng = element.get("lon")
+        if lat is None or lng is None:
+            skipped_count += 1
+            continue
+
+        existing, is_duplicate = await deduplicate_places(
+            db, name=name, lat=lat, lng=lng, source_name="openstreetmap"
+        )
+        if is_duplicate and existing:
+            updated_count += 1
+            continue
+
+        db.add(
+            Place(
+                name=name,
+                slug=_place_slug(name),
+                destination_id=destination.id,
+                latitude=lat,
+                longitude=lng,
+                type="FUEL",
+                source="openstreetmap",
+                source_place_id=f"osm-node-{element.get('id')}",
+                phone=tags.get("phone"),
+                address=tags.get("addr:full") or tags.get("addr:street"),
+            )
+        )
+        created_count += 1
+
+    await db.flush()
+    return {
+        "destination_id": destination_id,
+        "created": created_count,
+        "updated": updated_count,
+        "skipped": skipped_count,
+    }
+
+
 async def enrich_place(db: AsyncSession, place_id: str) -> dict:
-    result = await db.execute(select(Place).where(Place.id == place_id))
+    result = await db.execute(select(Place).where(Place.id == _to_uuid(place_id, "Place")))
     place = result.scalar_one_or_none()
     if not place:
         raise NotFoundError("Place not found")

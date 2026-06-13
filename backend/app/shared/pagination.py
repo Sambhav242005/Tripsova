@@ -1,7 +1,7 @@
 from math import ceil
 from typing import Generic, TypeVar, Sequence
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,8 +29,7 @@ class PaginatedResult(BaseModel, Generic[T]):
     per_page: int
     total_pages: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 async def paginate_query(

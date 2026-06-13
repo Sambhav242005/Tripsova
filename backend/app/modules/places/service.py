@@ -1,4 +1,6 @@
-from sqlalchemy import select, func
+import uuid
+
+from sqlalchemy import select, func, false
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.places.models import Place
@@ -20,7 +22,10 @@ async def get_places(
 ) -> PaginatedResult:
     stmt = select(Place)
     if destination_id:
-        stmt = stmt.where(Place.destination_id == destination_id)
+        try:
+            stmt = stmt.where(Place.destination_id == uuid.UUID(str(destination_id)))
+        except (ValueError, TypeError):
+            stmt = stmt.where(false())
     if place_type:
         stmt = stmt.where(Place.type == place_type)
     if search:
@@ -38,7 +43,23 @@ async def get_places(
 
 
 async def get_place(db: AsyncSession, place_id: str) -> Place:
-    result = await db.execute(select(Place).where(Place.id == place_id))
+    # Resolve by UUID when the identifier parses as one, otherwise fall back to
+    # the SEO-friendly slug (used by the public /food/[slug] SSR route).
+    pid: uuid.UUID | None = None
+    if isinstance(place_id, uuid.UUID):
+        pid = place_id
+    else:
+        try:
+            pid = uuid.UUID(str(place_id))
+        except (ValueError, TypeError):
+            pid = None
+
+    if pid is not None:
+        stmt = select(Place).where(Place.id == pid)
+    else:
+        stmt = select(Place).where(Place.slug == str(place_id))
+
+    result = await db.execute(stmt)
     place = result.scalar_one_or_none()
     if not place:
         raise NotFoundError(f"Place with id '{place_id}' not found")
@@ -59,14 +80,18 @@ async def get_nearby_places(
     place_type: str = None,
     diet: str = None,
 ):
-    point_wkt = f"SRID=4326;POINT({lng} {lat})"
     radius_meters = radius * 1000
+    # Build geography points on the fly from the stored lat/lng columns so we do
+    # not need a separate stored geometry column (keeps the dev SQLite schema and
+    # the PostGIS production schema identical). ST_DWithin on geography is metres.
+    origin = func.geography(func.ST_SetSRID(func.ST_MakePoint(lng, lat), 4326))
+    place_point = func.geography(
+        func.ST_SetSRID(func.ST_MakePoint(Place.longitude, Place.latitude), 4326)
+    )
     stmt = select(Place).where(
-        func.ST_DWithin(
-            Place.geom,
-            func.ST_GeogFromText(point_wkt),
-            radius_meters,
-        )
+        Place.latitude.isnot(None),
+        Place.longitude.isnot(None),
+        func.ST_DWithin(place_point, origin, radius_meters),
     )
     if place_type:
         stmt = stmt.where(Place.type == place_type)
@@ -98,9 +123,7 @@ async def create_place(db: AsyncSession, data: dict) -> Place:
         opening_hours=data.get("opening_hours"),
     )
     if place.latitude is not None and place.longitude is not None:
-        place.geom = func.ST_GeogFromText(
-            f"SRID=4326;POINT({place.longitude} {place.latitude})"
-        )
+        place.geom_wkt = f"SRID=4326;POINT({place.longitude} {place.latitude})"
     db.add(place)
     await db.flush()
     await db.refresh(place)
@@ -122,9 +145,7 @@ async def update_place(db: AsyncSession, place_id: str, data: dict) -> Place:
         lat = place.latitude
         lng = place.longitude
         if lat is not None and lng is not None:
-            place.geom = func.ST_GeogFromText(
-                f"SRID=4326;POINT({lng} {lat})"
-            )
+            place.geom_wkt = f"SRID=4326;POINT({lng} {lat})"
     await db.flush()
     await db.refresh(place)
     return place

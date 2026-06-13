@@ -73,7 +73,7 @@ class TestIntegration:
     @pytest.mark.asyncio
     async def test_explore_endpoints_return_ok(self, client: AsyncClient):
         response = await client.get("/api/places")
-        assert response.status_code in (200, 404)
+        assert response.status_code == 200
 
         response = await client.get("/api/destinations")
         assert response.status_code == 200

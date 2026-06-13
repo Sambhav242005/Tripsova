@@ -19,4 +19,6 @@ COPY backend/alembic.ini .
 
 EXPOSE 8010
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8010"]
+# Apply database migrations before serving so a fresh database gets its schema,
+# then start the API. `alembic upgrade head` is idempotent (no-op when current).
+CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8010"]

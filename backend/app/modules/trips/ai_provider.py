@@ -1,23 +1,33 @@
 """
-Tripova Trip Planner — zero AI.
-Uses a personalized multi-factor algorithm:
-  1. Style-personalized place scoring
-  2. Diet-aware food pairing
-  3. Geographic clustering
-  4. Variety-enforced itinerary construction
-  5. Smart budget allocation
-  6. Safety-aware routing
+Tripova Trip Planner.
+
+Two layers:
+  1. Rule-based multi-factor planner (style scoring, diet pairing, variety,
+     budget allocation, safety) — always runs and is the source of truth for
+     which places/food are recommended.
+  2. Optional AI itinerary generation via any OpenAI-compatible endpoint
+     (AI_ENABLED=true; provider/model/key set in config — defaults to a local
+     Ollama serving gemma4:31b-cloud): the model rewrites the day-by-day itinerary
+     and summary using only the places the rule-based layer selected. Any failure
+     falls back to layer 1.
 """
 
+import logging
 from math import log10
 from itertools import cycle
+from typing import Optional
 
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.modules.destinations.models import Destination
 from app.modules.places.models import Place
+from app.modules.trips.transport import echo_mode, resolve_transport
 from app.shared.utils import utcnow
+
+logger = logging.getLogger("tripsova.ai")
 
 # ─── Style-to-place-type mapping ──────────────────────────────────────────────
 STYLE_TYPE_MAP = {
@@ -37,10 +47,219 @@ DAY_ARCHETYPES = [
 ]
 
 
+# ─── AI itinerary schema (structured output) ──────────────────────────────────
+class AISlot(BaseModel):
+    activity: str
+    place_type: Optional[str] = None
+    food_match: Optional[str] = None
+    budget_share: str
+
+
+class AIDay(BaseModel):
+    day: int
+    archetype: str
+    title: str
+    morning: AISlot
+    afternoon: AISlot
+    evening: AISlot
+
+
+class AIItinerary(BaseModel):
+    summary: str
+    days: list[AIDay]
+
+
+AI_SYSTEM_PROMPT = (
+    "You are Tripova's trip planner for travel in India. You receive a traveller "
+    "profile and a pre-scored list of real places and food spots for one destination. "
+    "Build a realistic day-by-day itinerary. Rules: use only place and food names "
+    "from the provided lists (never invent places); produce exactly the requested "
+    "number of days; respect the traveller's styles and diet; keep budget_share "
+    "values as percentages summing to roughly 100% per day; write the summary as "
+    "2-3 friendly sentences."
+)
+
+
+def _build_ai_prompt(planner: "TripPlanner", base: dict) -> str:
+    places = [
+        f"- {p['place']['name']} (type={p['place']['type']}, score={p['score']})"
+        for p in planner.scored_places[:12]
+    ]
+    foods = [
+        f"- {f['place']['name']} (diet_tags={f['place'].get('diet_tags') or []}, score={f['score']})"
+        for f in planner.scored_food[:12]
+    ]
+    safety = "; ".join(base.get("safetyNotes") or [])
+    return (
+        f"Destination: {base.get('destinationName')}\n"
+        f"Days: {planner.days}\n"
+        f"Trip type: {planner.trip_type}, people: {planner.people_count}\n"
+        f"Travel mode to destination: {planner.travel_mode}\n"
+        f"Travel styles: {', '.join(planner.travel_styles) or 'balanced'}\n"
+        f"Diet preferences: {', '.join(planner.diet_preferences) or 'none'}\n"
+        f"Total budget: INR {planner.budget}\n"
+        f"Safety notes: {safety or 'none'}\n\n"
+        f"Places (pre-scored, best first):\n" + ("\n".join(places) or "- none available") + "\n\n"
+        f"Food spots (pre-scored, best first):\n" + ("\n".join(foods) or "- none available") + "\n\n"
+        f"Create the itinerary for exactly {planner.days} day(s)."
+    )
+
+
+# We ask for plain JSON ("json_object") and describe the exact shape in the prompt,
+# rather than a strict json_schema. Strict-schema mode is rejected (HTTP 400) by many
+# OpenAI-compatible backends — including Ollama and some OpenRouter-routed models — which
+# previously caused a silent fall back to the rule-based plan. json_object is broadly
+# supported; the shape instruction + validation below keep the output well-formed.
+_SCHEMA_INSTRUCTION = (
+    "Return ONLY a JSON object (no markdown, no prose) with this exact shape:\n"
+    '{"summary": "2-3 sentences", "days": [{"day": 1, "archetype": "arrival", '
+    '"title": "string", '
+    '"morning": {"activity": "string", "place_type": "string or null", '
+    '"food_match": "string or null", "budget_share": "25%"}, '
+    '"afternoon": {"activity": "string", "place_type": "string or null", '
+    '"food_match": "string or null", "budget_share": "40%"}, '
+    '"evening": {"activity": "string", "place_type": "string or null", '
+    '"food_match": "string or null", "budget_share": "35%"}}]}'
+)
+
+
+async def _generate_ai_itinerary(prompt: str) -> AIItinerary:
+    import httpx
+
+    payload = {
+        "model": settings.AI_MODEL,
+        "messages": [
+            {"role": "system", "content": AI_SYSTEM_PROMPT + "\n\n" + _SCHEMA_INSTRUCTION},
+            {"role": "user", "content": prompt},
+        ],
+        "response_format": {"type": "json_object"},
+        "stream": False,
+        "temperature": 0.4,
+    }
+    headers = {"Content-Type": "application/json"}
+    # Local Ollama needs no key; hosted providers (OpenRouter/OpenAI) do.
+    if settings.AI_API_KEY:
+        headers["Authorization"] = f"Bearer {settings.AI_API_KEY}"
+
+    async with httpx.AsyncClient(timeout=settings.AI_TIMEOUT_SECONDS) as client:
+        response = await client.post(settings.AI_API_URL, json=payload, headers=headers)
+        if response.status_code >= 400:
+            # Surface the provider's error body so failures are diagnosable, not silent.
+            raise RuntimeError(
+                f"AI provider returned HTTP {response.status_code}: {response.text[:500]}"
+            )
+        data = response.json()
+
+    try:
+        content = data["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError) as exc:
+        raise RuntimeError(f"Unexpected AI response shape: {str(data)[:500]}") from exc
+
+    if not content:
+        raise ValueError("AI provider returned an empty itinerary")
+
+    # Some models still wrap JSON in markdown fences even in JSON mode.
+    text = content.strip()
+    if text.startswith("```"):
+        text = text.strip("`").strip()
+        if text.lower().startswith("json"):
+            text = text[4:].strip()
+    return AIItinerary.model_validate_json(text)
+
+
+# ─── Guardrails: enforce the contract the prompt asks for ─────────────────────
+def _coerce_share(value: str | None) -> float | None:
+    """Parse a budget_share like '25%' or '25' into a float; None if unparseable."""
+    if value is None:
+        return None
+    try:
+        return float(str(value).strip().rstrip("%").strip())
+    except (ValueError, TypeError):
+        return None
+
+
+def _validate_and_repair(ai: AIItinerary, planner: "TripPlanner") -> AIItinerary:
+    """Enforce what the prompt asks for but a model may not honour.
+
+    json_object validation guarantees *shape*, not *semantics*. So:
+      - Day count must match the request — otherwise we reject (raise) and let
+        plan_trip fall back to the rule-based plan with the correct length.
+      - food_match must reference a real provided place/food; an invented name is
+        blanked rather than shown to the user (repair, not discard).
+      - budget_share percentages are renormalised to ~100% per day when they drift.
+
+    Raising here is intentional: the caller's except-clause turns it into a clean
+    fallback, so a fundamentally wrong generation can never reach the user.
+    """
+    if not ai.days:
+        raise ValueError("AI returned no itinerary days")
+    if len(ai.days) != planner.days:
+        raise ValueError(f"AI returned {len(ai.days)} day(s); expected {planner.days}")
+
+    # The names we actually sent the model — the only legal references back.
+    allowed = {
+        p["place"]["name"].strip().lower() for p in planner.scored_places[:12]
+    } | {
+        f["place"]["name"].strip().lower() for f in planner.scored_food[:12]
+    }
+
+    for idx, day in enumerate(ai.days, 1):
+        day.day = idx  # normalise to sequential 1..N regardless of what the model numbered
+        slots = [day.morning, day.afternoon, day.evening]
+
+        # Blank invented place references — only when we have a list to check against
+        # (a thinly-seeded destination sends an empty list; don't punish that case).
+        if allowed:
+            for slot in slots:
+                if not slot.food_match:
+                    continue
+                fm = slot.food_match.strip().lower()
+                # Tolerant match: exact, or either name contains the other
+                # (handles "Vinayak Family Restaurant, Goa" vs the bare name).
+                if not any(name == fm or name in fm or fm in name for name in allowed):
+                    logger.warning("AI referenced unknown place '%s'; dropping it", slot.food_match)
+                    slot.food_match = None
+
+        # Renormalise budget shares to sum ~100% when the model lets them drift.
+        shares = [_coerce_share(s.budget_share) for s in slots]
+        total = sum(v for v in shares if v is not None)
+        if total > 0 and abs(total - 100) > 5:
+            for slot, share in zip(slots, shares):
+                slot.budget_share = f"{round((share or 0) / total * 100)}%"
+
+    return ai
+
+
 # ─── Public entry point ───────────────────────────────────────────────────────
 async def plan_trip(db: AsyncSession, data: dict) -> dict:
     planner = TripPlanner(db, data)
-    return await planner.build()
+    result = await planner.build()
+
+    if settings.AI_ENABLED:
+        try:
+            ai = await _generate_ai_itinerary(_build_ai_prompt(planner, result))
+            ai = _validate_and_repair(ai, planner)
+            result["itinerary"] = [
+                {
+                    "day": d.day,
+                    "archetype": d.archetype,
+                    "title": d.title,
+                    "slots": {
+                        "morning": d.morning.model_dump(exclude_none=True),
+                        "afternoon": d.afternoon.model_dump(exclude_none=True),
+                        "evening": d.evening.model_dump(exclude_none=True),
+                    },
+                }
+                for d in ai.days
+            ]
+            result["summary"] = ai.summary
+            result["aiGenerated"] = True
+            return result
+        except Exception:
+            logger.exception("AI itinerary generation failed; falling back to rule-based plan")
+
+    result["aiGenerated"] = False
+    return result
 
 
 # ─── The planner ──────────────────────────────────────────────────────────────
@@ -48,17 +267,50 @@ class TripPlanner:
     def __init__(self, db: AsyncSession, data: dict):
         self.db = db
         self.destination_name = (data.get("destination") or "").strip()
-        self.days = max(1, min(int(data.get("days", 3)), 30))
-        self.budget = float(data.get("budget", 0))
-        self.people_count = max(1, int(data.get("peopleCount", 1)))
+        self.days = data.get("days", 3)
+        self.budget = data.get("budget", 0)
+        self.people_count = data.get("peopleCount", 1)
         self.trip_type = (data.get("tripType") or "SOLO").upper()
         self.travel_styles = data.get("travelStyle") or []
         self.diet_preferences = data.get("dietPreference") or []
+        # travel_mode echoes the caller's input (LAND/AIR/WATER or a transport like
+        # CAR/TRAIN/FLIGHT); refuel relevance is derived from the transport profile,
+        # so fuel stops show for self-driven petrol vehicles only — not trains/flights.
+        self.travel_mode = echo_mode(data.get("travelMode"))
+        _, _profile = resolve_transport(self.travel_mode)
+        self.refuel_relevant = _profile["refuel"]
+        self.travel_medium = _profile["medium"]
 
         self.destination = None
         self.all_places: list[Place] = []
         self.scored_places: list[dict] = []
         self.scored_food: list[dict] = []
+        self.fuel_places: list[dict] = []
+
+    # ── Clamped inputs (validated on every assignment) ──────────────────────
+    @property
+    def days(self) -> int:
+        return self._days
+
+    @days.setter
+    def days(self, value) -> None:
+        self._days = max(1, min(int(value), 30))
+
+    @property
+    def budget(self) -> float:
+        return self._budget
+
+    @budget.setter
+    def budget(self, value) -> None:
+        self._budget = max(0.0, float(value))
+
+    @property
+    def people_count(self) -> int:
+        return self._people_count
+
+    @people_count.setter
+    def people_count(self, value) -> None:
+        self._people_count = max(1, int(value))
 
     # ── Public builder ──────────────────────────────────────────────────────
     async def build(self) -> dict:
@@ -75,10 +327,14 @@ class TripPlanner:
             "destinationName": self.destination.name if self.destination else self.destination_name,
             "days": self.days,
             "tripType": self.trip_type,
+            "travelMode": self.travel_mode,
             "dietPreference": self.diet_preferences,
             "itinerary": itinerary,
             "recommendedPlaces": [p["place"] for p in self.scored_places[:10]],
             "recommendedFood": [f["place"] for f in self.scored_food[:10]],
+            # Refuelling only applies to self-driven petrol vehicles (car/motorcycle) —
+            # never on a train, flight, ferry, or while walking.
+            "fuelStops": self.fuel_places[:10] if self.refuel_relevant else [],
             "estimatedBudget": budget_plan,
             "safetyNotes": safety,
             "offlinePackSuggested": True,
@@ -87,7 +343,7 @@ class TripPlanner:
 
     # ── Step 1: Load data ───────────────────────────────────────────────────
     async def _load_data(self):
-        if not self.destination_name:
+        if not self.destination_name or self.db is None:
             return
 
         result = await self.db.execute(
@@ -105,6 +361,17 @@ class TripPlanner:
     # ── Step 2: Personalized place scoring ──────────────────────────────────
     def _score_places(self):
         for p in self.all_places:
+            # Petrol pumps are road-trip utilities, never sightseeing stops.
+            if p.type == "FUEL":
+                self.fuel_places.append({
+                    "id": str(p.id),
+                    "name": p.name,
+                    "latitude": p.latitude,
+                    "longitude": p.longitude,
+                    "phone": p.phone,
+                    "address": p.address,
+                })
+                continue
             if p.type in ("RESTAURANT", "CAFE", "EMERGENCY"):
                 continue
 

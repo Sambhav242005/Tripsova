@@ -1,1 +1,1 @@
-from app.modules.users.models import User
+from app.modules.users.models import User, RefreshToken

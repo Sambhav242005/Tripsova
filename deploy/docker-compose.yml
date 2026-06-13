@@ -1,6 +1,9 @@
 services:
   db:
-    image: postgres:16-alpine
+    # PostGIS image (not plain postgres) — the app uses ST_DWithin / geography
+    # functions for nearby search. The postgis extension is enabled by the
+    # initial Alembic migration.
+    image: postgis/postgis:16-3.4-alpine
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
@@ -56,6 +59,23 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+
+  nginx:
+    # Optional reverse proxy + TLS terminator. Opt-in via the "proxy" profile so
+    # the default `docker compose up` (and the CI deploy check on :5173) is
+    # unaffected:  docker compose --profile proxy up -d
+    image: nginx:1.27-alpine
+    profiles: ["proxy"]
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+    depends_on:
+      - frontend
+      - backend
 
 volumes:
   pgdata:

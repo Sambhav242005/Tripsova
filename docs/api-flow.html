@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Tripsova — API Logic Walkthrough</title>
+<style>
+  :root{
+    --bg:#0b1020; --panel:#141b30; --panel2:#1b2440; --line:#2a365c;
+    --text:#e6ecff; --muted:#8ea0cc; --accent:#5b8cff; --accent2:#33d6a6;
+    --warn:#ffb020; --danger:#ff5d6c; --ok:#33d6a6; --chip:#22304f;
+    --land:#5b8cff; --air:#a78bfa; --water:#33b6d6; --fuel:#ffb020;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:linear-gradient(160deg,#080c1a,#0b1020 40%);color:var(--text);
+    font:14px/1.55 "Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  header{padding:26px 28px 18px;border-bottom:1px solid var(--line);position:sticky;top:0;
+    background:rgba(8,12,26,.92);backdrop-filter:blur(8px);z-index:20}
+  h1{margin:0;font-size:22px;letter-spacing:.3px}
+  h1 .v{color:var(--accent);font-weight:700}
+  .sub{color:var(--muted);margin-top:4px;font-size:13px}
+  .wrap{max-width:1080px;margin:0 auto;padding:24px 20px 90px}
+  .tabs{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
+  .tab{padding:8px 14px;border:1px solid var(--line);border-radius:9px;background:var(--panel);
+    color:var(--muted);cursor:pointer;font-weight:600;font-size:13px;transition:.15s}
+  .tab:hover{border-color:var(--accent)}
+  .tab.active{background:var(--accent);color:#06122e;border-color:var(--accent)}
+  .progress{display:flex;align-items:center;gap:10px;margin-top:14px;color:var(--muted);font-size:12px}
+  .bar{flex:1;height:7px;border-radius:6px;background:var(--panel2);overflow:hidden;max-width:340px}
+  .bar > i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .3s}
+  .view{display:none}
+  .view.active{display:block}
+  .intro{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin:6px 0 18px;color:var(--muted)}
+  .intro b{color:var(--text)}
+  .step{position:relative;border:1px solid var(--line);border-radius:13px;background:var(--panel);
+    margin:0 0 10px;overflow:hidden;transition:.15s}
+  .step:hover{border-color:#3a4a7d}
+  .step.checked{border-color:var(--ok);box-shadow:0 0 0 1px var(--ok) inset}
+  .shead{display:flex;align-items:flex-start;gap:13px;padding:13px 15px;cursor:pointer}
+  .num{flex:none;width:30px;height:30px;border-radius:8px;background:var(--chip);color:var(--accent);
+    display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;border:1px solid var(--line)}
+  .step.checked .num{background:var(--ok);color:#06251a;border-color:var(--ok)}
+  .stitle{flex:1;min-width:0}
+  .stitle .t{font-weight:700;font-size:14.5px}
+  .stitle .f{color:var(--muted);font-size:12px;font-family:"Cascadia Code",Consolas,monospace;margin-top:2px;word-break:break-all}
+  .tag{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;
+    padding:2px 8px;border-radius:6px;border:1px solid var(--line);color:var(--muted);margin-left:6px}
+  .tag.http{color:var(--accent2);border-color:#1e5a47;background:#0e2a22}
+  .tag.mw{color:var(--air);border-color:#3c2f63;background:#1a1430}
+  .tag.svc{color:var(--accent);border-color:#243a72;background:#101a38}
+  .tag.db{color:var(--water);border-color:#1c4759;background:#0c222b}
+  .tag.ext{color:var(--fuel);border-color:#5c441a;background:#241a08}
+  .tag.dec{color:#ff9ec4;border-color:#5a2740;background:#2a0f1d}
+  .chk{flex:none;width:22px;height:22px;border-radius:6px;border:1.5px solid var(--line);
+    display:flex;align-items:center;justify-content:center;color:transparent;font-size:14px;margin-top:3px}
+  .step.checked .chk{background:var(--ok);border-color:var(--ok);color:#06251a}
+  .sbody{display:none;padding:0 15px 15px 58px;color:var(--muted);font-size:13px}
+  .step.open .sbody{display:block}
+  .sbody p{margin:6px 0}
+  .io{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
+  .io > div{flex:1;min-width:220px;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:9px 11px}
+  .io h4{margin:0 0 5px;font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted)}
+  code,.mono{font-family:"Cascadia Code",Consolas,monospace;font-size:12px;color:#cfe0ff}
+  .pill{display:inline-block;background:var(--chip);border:1px solid var(--line);border-radius:6px;
+    padding:1px 7px;margin:2px 3px 0 0;font-size:11.5px;color:#cfe0ff}
+  .branch{margin:8px 0 12px;border-left:2px dashed var(--line);padding-left:14px}
+  .branch .opt{margin:7px 0;padding:9px 12px;border-radius:9px;border:1px solid var(--line);background:var(--panel2)}
+  .branch .opt b{color:var(--text)}
+  .yes{border-left:3px solid var(--ok)} .no{border-left:3px solid var(--danger)}
+  .connector{height:14px;width:2px;background:var(--line);margin-left:30px}
+  .legend{display:flex;gap:8px;flex-wrap:wrap;margin:2px 0 4px}
+  .modechips{display:flex;gap:8px;margin:10px 0 18px;flex-wrap:wrap}
+  .mode{padding:9px 13px;border-radius:10px;border:1px solid var(--line);background:var(--panel);font-weight:600;font-size:12.5px}
+  .mode.land{border-color:#28407e} .mode.air{border-color:#3c2f63} .mode.water{border-color:#1c4759}
+  .find{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:14px 16px;margin:0 0 12px}
+  .find .ftop{display:flex;align-items:center;gap:10px}
+  .sev{font-size:10.5px;font-weight:800;letter-spacing:.6px;padding:3px 9px;border-radius:7px;text-transform:uppercase}
+  .sev.high{background:#3a0f17;color:var(--danger);border:1px solid #6a1f2b}
+  .sev.med{background:#2e2308;color:var(--warn);border:1px solid #5c441a}
+  .sev.low{background:#0e2a22;color:var(--accent2);border:1px solid #1e5a47}
+  .sev.good{background:#0e2a22;color:var(--ok);border:1px solid #1e5a47}
+  .find h3{margin:0;font-size:15px;flex:1}
+  .find .floc{color:var(--muted);font-size:12px;font-family:monospace;margin-top:6px}
+  .find p{margin:8px 0 0;color:var(--muted)}
+  .find .fix{margin-top:9px;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:9px 11px}
+  .find .fix h4{margin:0 0 4px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--accent2)}
+  pre{margin:6px 0 0;background:#070b18;border:1px solid var(--line);border-radius:8px;padding:10px 12px;overflow:auto}
+  pre code{color:#bcd2ff}
+  .controls{display:flex;gap:10px;margin:4px 0 16px;flex-wrap:wrap}
+  .btn{padding:7px 13px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--muted);cursor:pointer;font-size:12.5px;font-weight:600}
+  .btn:hover{border-color:var(--accent);color:var(--text)}
+  .foot{color:var(--muted);font-size:12px;margin-top:20px;text-align:center}
+  .kbd{font-family:monospace;background:var(--chip);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Tripsova — API Logic <span class="v">Walkthrough</span></h1>
+  <div class="sub">Click any step to expand · tick the box once you've verified it · progress is saved in your browser</div>
+  <div class="tabs">
+    <button class="tab active" data-view="generate">① Trip Generation</button>
+    <button class="tab" data-view="route">② Route Planning</button>
+    <button class="tab" data-view="fuel">③ Fuel Ingestion</button>
+    <button class="tab" data-view="review">★ Code Review</button>
+  </div>
+  <div class="progress">
+    <span id="ptext">0 / 0 verified</span>
+    <div class="bar"><i id="pbar"></i></div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- ============ FLOW 1: TRIP GENERATION ============ -->
+  <section class="view active" id="view-generate">
+    <div class="intro">
+      <b>POST /api/trips/generate</b> — the user fills the “Build My Trip” form; this is the request’s journey from the
+      browser, through middleware and auth, into the two-layer planner (rule-based + optional OpenRouter AI), then back as JSON.
+      <div class="legend" style="margin-top:8px">
+        <span class="tag http">HTTP/Edge</span><span class="tag mw">Middleware</span>
+        <span class="tag svc">Service/Logic</span><span class="tag db">Database</span>
+        <span class="tag ext">External API</span><span class="tag dec">Decision</span>
+      </div>
+    </div>
+    <div class="controls">
+      <button class="btn" onclick="expandAll('view-generate',true)">Expand all</button>
+      <button class="btn" onclick="expandAll('view-generate',false)">Collapse all</button>
+    </div>
+    <div id="steps-generate"></div>
+  </section>
+
+  <!-- ============ FLOW 2: ROUTE PLANNING ============ -->
+  <section class="view" id="view-route">
+    <div class="intro">
+      <b>POST /api/trips/route-plan</b> — given an origin, a destination (name + lat/lng) and a travel mode, this computes
+      distance, total time, day-by-day segments with coordinates &amp; ISO timestamps, overnight-stop suggestions, and
+      (LAND only) fuel stops.
+      <div class="modechips">
+        <span class="mode land">🚗 LAND · 50 km/h · ×1.25 route · +0.5h · fuel + overnight</span>
+        <span class="mode air">✈️ AIR · 750 km/h · +2.5h · single segment</span>
+        <span class="mode water">🚢 WATER · 35 km/h · +1.0h · single segment</span>
+      </div>
+    </div>
+    <div class="controls">
+      <button class="btn" onclick="expandAll('view-route',true)">Expand all</button>
+      <button class="btn" onclick="expandAll('view-route',false)">Collapse all</button>
+    </div>
+    <div id="steps-route"></div>
+  </section>
+
+  <!-- ============ FLOW 3: FUEL INGESTION ============ -->
+  <section class="view" id="view-fuel">
+    <div class="intro">
+      <b>POST /api/admin/sync/fuel/{destination_id}</b> — admin-only job that pulls real petrol pumps from OpenStreetMap
+      (Overpass API) and stores them as <code>Place(type="FUEL")</code>. This is the data that later appears as fuel stops
+      on LAND trips. <b>Nothing here is invented</b> — it’s OSM data.
+    </div>
+    <div class="controls">
+      <button class="btn" onclick="expandAll('view-fuel',true)">Expand all</button>
+      <button class="btn" onclick="expandAll('view-fuel',false)">Collapse all</button>
+    </div>
+    <div id="steps-fuel"></div>
+  </section>
+
+  <!-- ============ REVIEW ============ -->
+  <section class="view" id="view-review">
+    <div class="intro">
+      My assessment of the API-side logic after the OpenRouter swap + travel-mode + route-planner work.
+      Ordered by severity. Nothing here was auto-fixed — these are findings for you to decide on.
+    </div>
+    <div id="findings"></div>
+  </section>
+
+  <div class="foot">Generated for the Tripsova backend · open this file in any browser · state persists via localStorage</div>
+</div>
+
+<script>
+/* ---------------- DATA ---------------- */
+const FLOWS = {
+  generate: [
+    {tag:"http", t:"Browser builds the request", f:"frontend/src/components/tripova/screens/plan-screen.tsx:27",
+      d:"The plan form assembles a TripGenerateRequest and calls api.post('/api/trips/generate', body). travelMode is now part of the body (LAND default).",
+      in:["destination","days","budget","peopleCount","tripType","travelMode","travelStyle?","dietPreference?"],
+      out:["HTTP POST with JSON body + Bearer token"]},
+    {tag:"mw", t:"CORS middleware", f:"app/main.py:54",
+      d:"Checks the Origin against settings.cors_origins_list. Allows credentials, all methods/headers for permitted origins.",
+      in:["Origin header"], out:["pass / preflight 200"]},
+    {tag:"mw", t:"Request logging middleware", f:"app/main.py:52 · app/shared/request_logging.py",
+      d:"Assigns a request id, logs method+path+timing. Pure observability — never blocks.",
+      in:["request"], out:["request (annotated) + log line"]},
+    {tag:"mw", t:"Rate-limit middleware", f:"app/main.py:50 · app/shared/rate_limit.py",
+      d:"Per client-IP token bucket. Reads settings at request time so tests can toggle it. Auth routes use a stricter limit. Returns 429 when exceeded.",
+      in:["client IP"], out:["pass / 429 Too Many Requests"]},
+    {tag:"svc", t:"Route handler: generate_trip_endpoint", f:"app/modules/trips/routes.py:11",
+      d:"FastAPI resolves two dependencies before the body runs: get_current_user_id (auth) and get_db (session). Then validates the body against TripGenerateRequest.",
+      in:["TripGenerateRequest","Authorization header"], out:["user_id, db session, validated body"]},
+    {tag:"mw", t:"Auth: decode the JWT", f:"app/dependencies.py:23 → app/security.py",
+      d:"_decode_bearer_token splits 'Bearer <token>', calls decode_access_token (HS256, JWT_SECRET). Missing/!bearer → 401, bad/expired → 401. Returns the 'sub' claim as user_id.",
+      in:["Authorization: Bearer …"], out:["user_id (sub claim)"]},
+    {tag:"svc", t:"Service: generate_trip", f:"app/modules/trips/service.py:11",
+      d:"body.model_dump() is handed to the service. It calls plan_trip(db, data), then persists the result as a Trip row (see step 11).",
+      in:["db","user_id","data dict"], out:["calls plan_trip → plan dict"]},
+    {tag:"svc", t:"Planner entry: plan_trip", f:"app/modules/trips/ai_provider.py:122",
+      d:"Constructs TripPlanner(db, data) and awaits planner.build() — the rule-based layer that is always the source of truth for which places/food are recommended.",
+      in:["db","data"], out:["result dict (rule-based)"]},
+    {tag:"svc", t:"TripPlanner init + clamps", f:"app/modules/trips/ai_provider.py:154",
+      d:"Reads & clamps inputs (days 1–30, budget ≥0, people ≥1). Sets travel_mode from data['travelMode'] (validated against {LAND,AIR,WATER}, invalid → LAND). Initialises empty scored_places / scored_food / fuel_places.",
+      in:["raw data"], out:["normalised planner state, travel_mode"]},
+    {tag:"db", t:"build → _load_data", f:"app/modules/trips/ai_provider.py:220",
+      d:"If a DB + destination name are present: SELECT Destination WHERE name ILIKE %name%, then SELECT all Places for that destination_id. With no DB (or no match) it degrades to an empty-but-valid plan.",
+      in:["destination name"], out:["destination row, all_places[]"]},
+    {tag:"svc", t:"build → scoring & assembly", f:"ai_provider.py:237–217",
+      d:"_score_places (★ FUEL is split out into fuel_places, never scored as sightseeing; RESTAURANT/CAFE/EMERGENCY skipped) → _score_food (diet-aware) → _build_itinerary (archetype days, diverse picks) → _calculate_budget (ratios by trip type) → _collect_safety_notes. Returns a dict that now carries travelMode and fuelStops (LAND only).",
+      in:["all_places, styles, diet, budget"], out:["summary, itinerary, recommendedPlaces/Food, estimatedBudget, safetyNotes, travelMode, fuelStops"]},
+    {tag:"dec", t:"DECISION: is OPENROUTER_API_KEY set?", f:"ai_provider.py:126", branch:[
+        {k:"yes", label:"Key present → AI rewrite", text:"_build_ai_prompt feeds the top pre-scored places/food + traveller profile + travelMode to _generate_ai_itinerary: an httpx POST to https://openrouter.ai/api/v1/chat/completions with response_format=json_schema. On success the day-by-day itinerary + summary are replaced and aiGenerated=True. Any exception is caught and logged → falls through to rule-based (aiGenerated=False)."},
+        {k:"no", label:"No key → rule-based only", text:"result['aiGenerated']=False and the deterministic itinerary from step 11 is returned unchanged."}
+      ]},
+    {tag:"ext", t:"OpenRouter call (only if key set)", f:"ai_provider.py:104 (_generate_ai_itinerary)",
+      d:"Builds payload {model: OPENROUTER_MODEL (default openrouter/auto), messages:[system, user], response_format:{type:json_schema, strict:true, schema:AIItinerary.model_json_schema()}}. Strips markdown fences, then AIItinerary.model_validate_json. ⚠ See Review finding #1 about strict mode.",
+      in:["prompt text","OPENROUTER_API_KEY"], out:["AIItinerary (summary + days) or raises"]},
+    {tag:"db", t:"Persist the Trip row", f:"app/modules/trips/service.py:13",
+      d:"Creates Trip(user_id, destination_id, title, trip_type, days, budget, people_count, travel_style, diet_preference, offline_required, generated_plan=plan), flushes, refreshes, then sets plan['tripId'].",
+      in:["plan dict","user_id"], out:["persisted Trip, plan.tripId"]},
+    {tag:"http", t:"Serialize response", f:"app/modules/trips/routes.py:18",
+      d:"TripGenerateResponse(**result) filters to the response schema (now incl. travelMode, fuelStops, aiGenerated, tripId) and FastAPI returns it as JSON.",
+      in:["result dict"], out:["200 JSON TripGenerateResponse"]},
+    {tag:"http", t:"Browser renders it", f:"frontend/.../plan-screen.tsx:37",
+      d:"transformResponse maps itinerary days into morning/afternoon/evening cards; setFuelStops(res.fuelStops) drives the ‘⛽ Fuel Stops Nearby’ card — which only has content for LAND trips.",
+      in:["TripGenerateResponse"], out:["itinerary UI + fuel card"]}
+  ],
+  route: [
+    {tag:"http", t:"Browser posts a route request", f:"RoutePlanRequest · app/modules/trips/schemas.py",
+      d:"Body: origin{name,latitude,longitude}, destination{…}, travelMode (LAND/AIR/WATER), departureTime? (ISO).",
+      in:["origin","destination","travelMode","departureTime?"], out:["HTTP POST + Bearer token"]},
+    {tag:"mw", t:"CORS → logging → rate-limit", f:"app/main.py:50-60",
+      d:"Same middleware stack as every route (see Trip Generation steps 2–4).",
+      in:["request"], out:["pass / 429"]},
+    {tag:"svc", t:"Route handler: route_plan_endpoint", f:"app/modules/trips/routes.py (route-plan)",
+      d:"Requires auth (get_current_user_id) + db. Validates the body, then calls plan_route(db, body.model_dump()). This endpoint computes only — it persists nothing.",
+      in:["RoutePlanRequest","Bearer"], out:["calls plan_route"]},
+    {tag:"svc", t:"plan_route: distance & time", f:"app/modules/trips/route_planner.py (plan_route)",
+      d:"haversine_km(origin,dest) → straight-line km. distance_km = straight × route_factor. drive_hours = distance/speed. total_hours = drive_hours + mode overhead. departure resolved by _parse_departure (defaults to tomorrow 08:00 UTC).",
+      in:["origin/dest coords","mode"], out:["distance_km, drive_hours, total_hours, departure"]},
+    {tag:"dec", t:"DECISION: which travel mode?", f:"route_planner.py", branch:[
+        {k:"yes", label:"AIR / WATER → one continuous leg", text:"Returns a single segment (departure→arrival), overnightStops=[], fuelStops=[], plus a note that refuelling and overnight road stops don’t apply. This is the fix for the ‘refuel mid-flight’ problem."},
+        {k:"no", label:"LAND → simulate driving days", text:"Enters the day loop below: drive until ~20:00 (max 9h/day), then pause overnight and resume at 08:00."}
+      ]},
+    {tag:"svc", t:"LAND: day-segment loop", f:"route_planner.py (while remaining_hours)",
+      d:"Each iteration drives min(hours-until-20:00, 9h, remaining). Emits a segment with startPoint/endPoint (interpolated lat/lng) and ISO startTime/endTime so the frontend can draw the route on a map with a timeline.",
+      in:["drive_hours, departure"], out:["segments[] with coords + times"]},
+    {tag:"db", t:"Overnight stop → nearest city", f:"route_planner.py (_nearest_destination / _city_dict)",
+      d:"When a day ends mid-route, interpolate the stop point, then SELECT Destinations with coordinates and pick the haversine-nearest. _city_dict adds distanceFromRouteKm.",
+      in:["stop point"], out:["nearestCity{name,city,state,lat,lng,distanceFromRouteKm}"]},
+    {tag:"db", t:"Overnight stop → hotel options", f:"route_planner.py (_hotel_options)",
+      d:"SELECT Places WHERE destination_id = city AND type IN (HOTEL,HOMESTAY) ORDER BY tripova_score DESC LIMIT 5 — real, bookable stays in that city.",
+      in:["nearest city id"], out:["hotels[] (best first)"]},
+    {tag:"svc", t:"Overnight stop → traveller choices", f:"route_planner.py (_stop_options)",
+      d:"Builds the three options the user picks from: BOOK_HOTEL (with the hotels above), STAY_WITH_RELATIVES, CONTINUE. Plus arrivalTime / resumeTime for the timeline.",
+      in:["city, hotels"], out:["options[3] + arrival/resume times"]},
+    {tag:"svc", t:"LAND: fuel stops", f:"route_planner.py (FUEL_INTERVAL_KM loop)",
+      d:"Walks the route every ~450 km, interpolating location and using _time_at_km (which reads the real leg timestamps, so estimates account for overnight pauses). LAND only.",
+      in:["distance_km, legs[]"], out:["fuelStops[] {atKm, location, estimatedTime}"]},
+    {tag:"http", t:"Serialize + return", f:"RoutePlanResponse · routes.py",
+      d:"RoutePlanResponse packs travelMode, distanceKm, estimatedDurationHours, departure/arrival, segments, overnightStops, fuelStops, notes → JSON.",
+      in:["computed dict"], out:["200 JSON RoutePlanResponse"]}
+  ],
+  fuel: [
+    {tag:"mw", t:"Admin auth gate", f:"app/dependencies.py:35 (require_admin)",
+      d:"require_admin depends on get_current_user_role; non-ADMIN tokens get 403. This is the only thing standing between the public and an Overpass-triggering job.",
+      in:["Bearer token"], out:["role==ADMIN / 403"]},
+    {tag:"svc", t:"Handler: sync fuel", f:"app/modules/admin/routes.py (sync/fuel/{destination_id})",
+      d:"Validates the destination id and calls sync_fuel_stations(db, destination_id, radius_m).",
+      in:["destination_id","radius?"], out:["calls ingestion service"]},
+    {tag:"db", t:"Resolve destination", f:"app/modules/data_sources/ingestion_service.py (_to_uuid + lookup)",
+      d:"_to_uuid coerces the path string into a UUID (malformed → NotFoundError), then loads the Destination to get its lat/lng centre.",
+      in:["destination_id"], out:["Destination (lat,lng) / 404"]},
+    {tag:"ext", t:"Query OpenStreetMap (Overpass)", f:"app/modules/maps/osm.py (query_overpass)",
+      d:"POSTs [out:json];node[amenity=fuel](around:radius,lat,lng);out body 100; to overpass-api.de. Returns real petrol-pump nodes.",
+      in:["lat,lng,radius"], out:["OSM fuel nodes"]},
+    {tag:"svc", t:"Normalise + dedupe", f:"app/modules/data_sources/normalizer.py (deduplicate_places)",
+      d:"Maps each node to a Place candidate; dedupe is a lat/lng bounding box (≈100m, delta 0.001) — the earlier PostGIS-geom bug is gone. Skips nodes without coordinates.",
+      in:["OSM nodes"], out:["unique Place candidates"]},
+    {tag:"db", t:"Upsert FUEL places", f:"ingestion_service.py (sync_fuel_stations)",
+      d:"Creates Place(type='FUEL', source='openstreetmap', source_place_id='osm-node-<id>', slug=_place_slug(name)) — unique slug avoids the NOT NULL IntegrityError. Returns {created, updated, skipped}.",
+      in:["candidates"], out:["{destination_id, created, updated, skipped}"]}
+  ]
+};
+
+const FINDINGS = [
+  {sev:"high", h:"OpenRouter strict json_schema may be rejected", loc:"app/modules/trips/ai_provider.py:104 (_generate_ai_itinerary)",
+    p:"The payload sends response_format.json_schema.strict = true with AIItinerary.model_json_schema(). I checked the generated schema: it has NO additionalProperties:false anywhere, and Optional fields (place_type, food_match) use anyOf+default. OpenAI-style strict structured-output (which several OpenRouter-routed models enforce) requires additionalProperties:false on every object and every property listed in required. Because openrouter/auto can route to such a model, the AI layer can intermittently 400. It won't crash the app (the try/except falls back to the rule-based plan), but the AI feature would silently never engage for those models.",
+    fix:"Either set strict:false (lose hard enforcement but keep json_schema guidance), or post-process the schema to inject additionalProperties:false and promote optional fields to required+nullable before sending. A small _strict_schema(AIItinerary) helper is the clean fix.",
+    code:"# quick option:\n\"json_schema\": {\"name\":\"itinerary\", \"strict\": False, \"schema\": AIItinerary.model_json_schema()}"},
+  {sev:"med", h:"GET /api/trips/{trip_id} has no auth or ownership check", loc:"app/modules/trips/routes.py:28",
+    p:"get_trip_endpoint takes only trip_id + db — no get_current_user_id dependency and no user_id filter. Any unauthenticated caller who knows (or guesses) a trip UUID can read someone else's full generated plan. Pre-existing, not introduced by this change, but worth closing since trips can carry personal travel detail.",
+    fix:"Add Depends(get_current_user_id) and filter Trip.user_id == user_id in get_trip (404 if not owned)."},
+  {sev:"med", h:"Route times are straight-line, not road routing", loc:"app/modules/trips/route_planner.py (haversine_km + route_factor)",
+    p:"Distance is haversine × a flat route_factor (1.25 for LAND). Real roads bend around mountains, lakes and borders, so multi-day LAND estimates can be off by a meaningful margin, and the 'nearest city' is nearest to a straight-line point rather than an actual road position. Fine as a planning estimate; not turn-by-turn accurate.",
+    fix:"Optional: call the free OSRM (or GraphHopper) routing API for real geometry + duration when you want precision, keeping haversine as the offline fallback."},
+  {sev:"low", h:"_nearest_destination reloads all destinations per stop", loc:"app/modules/trips/route_planner.py (_nearest_destination)",
+    p:"Each overnight stop runs SELECT (all destinations with coords) and scans them in Python. For a 4-day trip that's a handful of full-table scans. Harmless at current data size, but it won't scale and it's an easy win.",
+    fix:"Load destinations once at the top of plan_route and reuse, or use a Postgres distance query (PostGIS / earthdistance) with LIMIT 1."},
+  {sev:"low", h:"OpenRouter call lacks max_tokens / explicit timeout tuning", loc:"app/modules/trips/ai_provider.py:104",
+    p:"httpx timeout is 120s (good), but there's no max_tokens cap on the completion. A verbose model on a long itinerary could be slow/costly. Low risk because the schema bounds the output shape.",
+    fix:"Add \"max_tokens\": 4000 (or similar) to the payload."},
+  {sev:"good", h:"Two-layer fallback design is solid", loc:"app/modules/trips/ai_provider.py:122",
+    p:"The rule-based planner is always the source of truth and the AI layer only rewrites presentation. Every AI failure path (no key, network error, parse error) degrades cleanly to a valid plan with aiGenerated=False. This is the right resilience pattern and it's well-tested.",
+    fix:""},
+  {sev:"good", h:"Fuel logic is correctly mode-gated", loc:"ai_provider.py + route_planner.py",
+    p:"FUEL places are split out before sightseeing scoring (no more petrol pumps as 'attractions'), and fuelStops are emitted only when travel_mode == 'LAND' in both the planner and the route planner. AIR/WATER return empty fuel + a clarifying note. The original 'refuel mid-flight' complaint is fully addressed and covered by tests (test_ai_trips.py, test_route_planner.py).",
+    fix:""}
+];
+
+/* ---------------- RENDER ---------------- */
+const STORE_KEY = "tripsova-apiflow-checks";
+let checks = JSON.parse(localStorage.getItem(STORE_KEY) || "{}");
+
+function esc(s){return String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));}
+
+function ioBlock(step){
+  let h="";
+  if(step.in||step.out){
+    h+='<div class="io">';
+    if(step.in) h+='<div><h4>Input</h4>'+step.in.map(x=>`<span class="pill">${esc(x)}</span>`).join("")+'</div>';
+    if(step.out) h+='<div><h4>Output</h4>'+step.out.map(x=>`<span class="pill">${esc(x)}</span>`).join("")+'</div>';
+    h+='</div>';
+  }
+  return h;
+}
+function branchBlock(step){
+  if(!step.branch) return "";
+  return '<div class="branch">'+step.branch.map(b=>
+    `<div class="opt ${b.k==='yes'?'yes':'no'}"><b>${esc(b.label)}</b><div style="margin-top:4px">${esc(b.text)}</div></div>`
+  ).join("")+'</div>';
+}
+
+function renderFlow(key){
+  const arr = FLOWS[key], host = document.getElementById("steps-"+key);
+  host.innerHTML = arr.map((s,i)=>{
+    const id = key+"-"+i;
+    const on = checks[id] ? "checked" : "";
+    return `${i>0?'<div class="connector"></div>':''}
+    <div class="step ${on}" id="st-${id}">
+      <div class="shead">
+        <div class="num">${i+1}</div>
+        <div class="stitle" data-toggle="${id}">
+          <div class="t">${esc(s.t)}<span class="tag ${s.tag}">${s.tag}</span></div>
+          <div class="f">${esc(s.f)}</div>
+        </div>
+        <div class="chk" data-check="${id}">✓</div>
+      </div>
+      <div class="sbody">
+        <p>${esc(s.d)}</p>
+        ${branchBlock(s)}
+        ${ioBlock(s)}
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function renderFindings(){
+  document.getElementById("findings").innerHTML = FINDINGS.map(x=>`
+    <div class="find">
+      <div class="ftop"><span class="sev ${x.sev}">${x.sev==='good'?'OK':x.sev}</span><h3>${esc(x.h)}</h3></div>
+      <div class="floc">${esc(x.loc)}</div>
+      <p>${esc(x.p)}</p>
+      ${x.fix?`<div class="fix"><h4>Suggested fix</h4>${esc(x.fix)}${x.code?`<pre><code>${esc(x.code)}</code></pre>`:''}</div>`:''}
+    </div>`).join("");
+}
+
+function updateProgress(){
+  const total = Object.values(FLOWS).reduce((n,a)=>n+a.length,0);
+  const done = Object.keys(checks).filter(k=>checks[k]).length;
+  document.getElementById("ptext").textContent = done+" / "+total+" verified";
+  document.getElementById("pbar").style.width = (total? (done/total*100):0)+"%";
+}
+
+function expandAll(viewId,open){
+  document.querySelectorAll("#"+viewId+" .step").forEach(s=>s.classList.toggle("open",open));
+}
+
+/* ---------------- EVENTS ---------------- */
+document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{
+  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
+  document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));
+  t.classList.add("active");
+  document.getElementById("view-"+t.dataset.view).classList.add("active");
+}));
+
+document.addEventListener("click",e=>{
+  const tog = e.target.closest("[data-toggle]");
+  const chk = e.target.closest("[data-check]");
+  if(chk){
+    const id = chk.dataset.check;
+    checks[id] = !checks[id];
+    localStorage.setItem(STORE_KEY, JSON.stringify(checks));
+    document.getElementById("st-"+id).classList.toggle("checked", !!checks[id]);
+    updateProgress();
+    e.stopPropagation(); return;
+  }
+  if(tog){
+    document.getElementById("st-"+tog.dataset.toggle).classList.toggle("open");
+  }
+});
+
+/* ---------------- INIT ---------------- */
+["generate","route","fuel"].forEach(renderFlow);
+renderFindings();
+updateProgress();
+</script>
+</body>
+</html>

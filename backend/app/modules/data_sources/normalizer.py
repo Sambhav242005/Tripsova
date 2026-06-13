@@ -28,13 +28,13 @@ async def deduplicate_places(
     source_name: str,
 ) -> tuple[Place | None, bool]:
     if lat is not None and lng is not None:
-        point_wkt = f"SRID=4326;POINT({lng} {lat})"
+        # ~100m proximity via a lat/lng bounding box. The model stores plain
+        # float coordinates (no PostGIS geometry column), so this works on
+        # both SQLite and Postgres.
+        delta = 0.001
         stmt = select(Place).where(
-            func.ST_DWithin(
-                Place.geom,
-                func.ST_GeogFromText(point_wkt),
-                100,
-            )
+            Place.latitude.between(lat - delta, lat + delta),
+            Place.longitude.between(lng - delta, lng + delta),
         )
         result = await db.execute(stmt)
         existing = result.scalars().first()

@@ -4,6 +4,8 @@ import React from "react";
 import type { Theme } from "@/data";
 import { Icon } from "../icon";
 
+// Responsive overlay: a bottom sheet on mobile, a centered modal dialog on
+// tablet/desktop (md+). Shared by the Create, Notifications and Emergency sheets.
 export function Sheet({
   open, onClose, t, children, title,
 }: {
@@ -11,40 +13,47 @@ export function Sheet({
 }) {
   return (
     <div
-      style={{
-        position: "fixed", top: 0, bottom: 0, left: "50%",
-        transform: "translateX(-50%)", width: "100%", maxWidth: 430,
-        zIndex: 300, pointerEvents: open ? "auto" : "none",
-      }}
+      className="fixed inset-0 z-[300] flex justify-center items-end md:items-center md:p-6"
+      style={{ pointerEvents: open ? "auto" : "none" }}
+      role="dialog"
+      aria-modal="true"
     >
+      {/* Backdrop */}
       <div
         onClick={onClose}
-        style={{
-          position: "absolute", inset: 0,
-          background: "rgba(13,19,32,0.55)",
-          opacity: open ? 1 : 0,
-          transition: "opacity 0.28s",
-        }}
+        className="absolute inset-0 transition-opacity duration-300"
+        style={{ background: "rgba(13,19,32,0.55)", opacity: open ? 1 : 0 }}
       />
+
+      {/* Panel: bottom-pinned on mobile, floating card on md+ */}
       <div
+        className={[
+          "relative w-full max-w-[440px] md:max-w-[480px] overflow-y-auto",
+          "rounded-t-[22px] md:rounded-[20px]",
+          "transition-all duration-300 ease-out",
+          open
+            ? "translate-y-0 opacity-100 md:scale-100"
+            : "translate-y-full opacity-100 md:translate-y-0 md:opacity-0 md:scale-95",
+        ].join(" ")}
         style={{
-          position: "absolute", left: 0, right: 0, bottom: 0,
-          background: t.bg, borderRadius: "22px 22px 0 0",
-          borderTop: `1px solid ${t.border}`,
+          background: t.bg,
+          border: `1px solid ${t.border}`,
           boxShadow: "0 -8px 40px rgba(13,19,32,0.3)",
-          transform: open ? "translateY(0)" : "translateY(110%)",
-          transition: "transform 0.34s cubic-bezier(0.4,0,0.2,1)",
-          maxHeight: "90%", overflowY: "auto", paddingBottom: 24,
+          maxHeight: "90vh",
+          paddingBottom: 24,
         }}
       >
-        <div style={{ display: "flex", justifyContent: "center", padding: "10px 0 4px" }}>
+        {/* Mobile grabber handle (hidden on desktop) */}
+        <div className="flex md:hidden" style={{ justifyContent: "center", padding: "10px 0 4px" }}>
           <div style={{ width: 38, height: 4, borderRadius: 2, background: t.border }} />
         </div>
+
         {title && (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 18px 12px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 18px 12px" }}>
             <span style={{ fontSize: 20, fontWeight: 700 }}>{title}</span>
             <button
               onClick={onClose}
+              aria-label="Close"
               style={{
                 width: 32, height: 32, borderRadius: "50%",
                 border: "none", background: t.tag, cursor: "pointer",

@@ -25,6 +25,7 @@ class PlaceType(str, PyEnum):
     EXPERIENCE = "EXPERIENCE"
     TRANSPORT = "TRANSPORT"
     EMERGENCY = "EMERGENCY"
+    FUEL = "FUEL"
 
 
 class DietTag(str, PyEnum):

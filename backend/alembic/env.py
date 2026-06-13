@@ -8,8 +8,18 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from app.config import settings
 from app.database import Base
 
-# Import all models so they register on Base.metadata
+# Import all model modules so every table registers on Base.metadata for autogenerate.
+import app.modules.auth.models  # noqa: F401
 import app.modules.users.models  # noqa: F401
+import app.modules.destinations.models  # noqa: F401
+import app.modules.places.models  # noqa: F401
+import app.modules.feed.models  # noqa: F401
+import app.modules.trips.models  # noqa: F401
+import app.modules.offline.models  # noqa: F401
+import app.modules.trippods.models  # noqa: F401
+import app.modules.trust.models  # noqa: F401
+import app.modules.partners.models  # noqa: F401
+import app.modules.bookings.models  # noqa: F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.database_url_sync)

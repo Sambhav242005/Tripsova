@@ -7,10 +7,12 @@ Tripova is an India-first travel discovery platform built with a modular FastAPI
 ## Root Directory
 
 ```
-D:\Travel/
+Tripsova/
 ├── backend/                  # FastAPI Python backend
-├── tripova.jsx               # Frontend entry (do not modify)
-└── WhatsApp Image 2026-05-31 at 3.20.55 PM.jpeg
+├── frontend/                 # Next.js frontend (fetches the live API)
+├── deploy/                   # docker-compose, nginx.conf, system packages
+├── docs/                     # Project docs (this file, USER_WORKFLOW, plans)
+└── tripova.jsx               # Legacy prototype, not referenced by any build
 ```
 
 ## Backend Structure
@@ -25,7 +27,7 @@ backend/
 ├── alembic/                   # Database migrations
 │   ├── env.py                 # Alembic environment config
 │   ├── script.py.mako         # Migration template
-│   └── versions/              # Migration versions (initially empty)
+│   └── versions/              # Migration versions
 ├── app/                       # Application source
 │   ├── __init__.py
 │   ├── config.py              # Settings from env vars
@@ -37,15 +39,7 @@ backend/
 │   └── shared/                # Shared utilities (see below)
 ├── scripts/
 │   └── seed.py                # Database seeder (3 users, 7 dests, 105 places, etc.)
-└── tests/
-    ├── conftest.py            # Pytest fixtures
-    ├── test_api.py
-    ├── test_auth.py
-    ├── test_destinations.py
-    ├── test_offline.py
-    ├── test_places.py
-    ├── test_ranking.py
-    └── test_trip_planner.py
+└── tests/                     # Pytest suite (see "Tests" section below)
 ```
 
 ### app/ — Core Application
@@ -77,7 +71,7 @@ backend/
 | `trust/` | models, schemas, service, routes, **scoring** | TrustScore engine for users, places, posts, partners |
 | `partners/` | models, schemas, service, routes | Local partner listings and management |
 | `bookings/` | models, schemas, service, routes | Booking lifecycle management |
-| `admin/` | service, routes | Admin dashboard (no own models — uses shared models) |
+| `admin/` | schemas, service, routes | Admin dashboard (no own models — uses shared models) |
 | `data_sources/` | schemas, service, routes, **base**, **osm_provider**, **geofabrik_provider**, **wikidata_provider**, **wikivoyage_provider**, **google_places_provider**, **weather_provider**, **reddit_deep_review_provider**, **ingestion_service**, **normalizer** | Multi-source data ingestion from OSM, Geofabrik, Wikidata, Wikivoyage, Google Places, Weather, Reddit |
 
 ### Feature Module Pattern
@@ -91,7 +85,7 @@ Every module (except `food/`, `admin/`) follows a consistent 4-file pattern:
 
 Exceptions:
 - `food/` — no `models.py`; uses `FoodVerification` model from `users/models.py`
-- `admin/` — no `models.py` or `schemas.py`; administrative operations on shared models
+- `admin/` — no `models.py`; administrative operations on shared models
 - `places/` — extra `ranking.py` for multi-factor scoring algorithm
 - `trips/` — extra `ai_provider.py` for AI trip generation
 - `offline/` — extra `pack_builder.py` and `sync.py` for pack generation/sync
@@ -176,12 +170,16 @@ scripts/
 ```
 tests/
 ├── conftest.py
+├── test_admin.py
 ├── test_api.py
 ├── test_auth.py
+├── test_auth_refresh.py
 ├── test_destinations.py
 ├── test_offline.py
 ├── test_places.py
 ├── test_ranking.py
+├── test_rate_limit.py
+├── test_request_logging.py
 ├── test_sentiment.py
 └── test_trip_planner.py
 ```
@@ -219,135 +217,74 @@ From `scripts/seed.py`:
 
 ## Known Issues & Problems
 
-This section catalogues all known issues, gaps, and technical debt in the Tripova project. These need attention before production readiness.
+Last verified against the working tree on 2026-06-11. Items confirmed fixed have moved to the Resolved section below.
 
-### Critical Issues
+### Open Issues
 
-#### 1. No database migrations exist
-`alembic/versions/` is completely empty. The app relies on `Base.metadata.create_all()` at startup in `app/database.py:init_db()`. This is not safe for production — schema changes require a manual full rebuild with data loss. Alembic is configured (`alembic.ini` + `env.py`) but no initial migration has been generated.
+#### 1. Celery/RQ background worker not wired
+Celery is listed as an optional dependency but no task queue is configured. Offline pack generation and data-ingestion sync run synchronously inside the request-response cycle.
 
-#### 2. Missing test dependency: `aiosqlite`
-The test config at `conftest.py:12` uses `sqlite+aiosqlite://` as the test database URL, but `aiosqlite` is not listed in either `pyproject.toml` or `requirements.txt`. Running tests will fail with `ModuleNotFoundError: No module named 'aiosqlite'` unless manually installed.
+#### 2. No input sanitization or request size limiting beyond Pydantic
+Pydantic handles type validation, but there is no additional sanitization for text fields and no request body size limit.
 
-#### 3. `vaderSentiment` missing from `pyproject.toml`
-The sentiment analysis module (`app/shared/sentiment.py`) imports `vaderSentiment`, which is listed in `requirements.txt` but **not** in `pyproject.toml` dependencies. This means `pip install -e .` will not install it, causing runtime import errors in environments that use the pyproject-based install (e.g., Docker image build).
+#### 3. No file/image upload endpoints
+Models have image URL fields but no endpoint can populate them (places, feed posts, profiles, food verifications).
 
-#### 4. Config does not use pydantic-settings
-`app/config.py` uses raw `os.getenv()` calls instead of inheriting from `pydantic-settings` `BaseSettings`, even though `pydantic-settings>=2.1.0` is a declared dependency. This means:
-- No automatic type coercion for non-string types (DEBUG, OFFLINE_PACK_MAX_SIZE_MB are manually handled)
-- No `.env` auto-loading (manually calling `load_dotenv()`)
-- No validation or default-from-env-variable-name conventions
-- The `CORS_ORIGINS` split is fragile — a missing origin produces single-element lists
+#### 4. Pagination not audited on every list endpoint
+`app/shared/pagination.py` is used by destinations, places, feed, trippods, and partners. The remaining list endpoints (bookings, trust, offline, data_sources) should be audited for unbounded queries.
 
-### Infrastructure & Deployment Problems
+#### 5. No email/phone verification
+`User.email_verified` / `phone_verified` exist but are never set by any endpoint.
 
-#### 5. No connection pooling configuration
-`app/database.py:6` creates the engine with only `echo=settings.DEBUG`. No pool size, pool overflow, pool timeout, or pool recycling is configured. Under load, connections will exhaust the PostgreSQL `max_connections` limit.
+#### 6. CORS origins not validated
+`CORS_ORIGINS` can be set to `*` in `.env` with no validation preventing it in production.
 
-#### 6. Nginx directory is empty
-`deploy/nginx/` exists but contains no configuration files. The Docker Compose stack has no reverse proxy, meaning all services are directly exposed. No TLS/SSL termination is configured.
+#### 7. Google Places provider fails silently
+`google_places_provider.py` has no logging or warning when `GOOGLE_PLACES_API_KEY` is unset; data providers degrade with no operator signal.
 
-#### 7. Redis caching layer not wired
-Redis is listed as an optional dependency in `pyproject.toml` (commented) but no caching logic exists anywhere in the codebase. Frequently accessed data (destinations, places, rankings) has no cache layer.
+#### 8. Food verification score formula is naive
+`food_score = min(100, verification_count * 20)` — a flat 20 points per verification regardless of verifier trustworthiness.
 
-#### 8. Celery/RQ background worker not wired
-Celery is listed as an optional dependency but no task queue is configured. Offline pack generation, data ingestion sync, and other long-running tasks run synchronously in the request-response cycle.
+#### 9. `tripova.jsx` at root is orphaned
+Legacy prototype at the repo root, not referenced by any build configuration.
 
-### Code Quality & Architecture Problems
+#### 10. Generic Next.js README
+`frontend/README.md` is still `create-next-app` boilerplate with no Tripsova-specific setup instructions.
 
-#### 9. Global exception handler exposes internals in debug mode
-`app/main.py:51-56` catches all `Exception` types and returns `str(exc)` in the response body when `DEBUG=true`. This can leak sensitive information (stack traces, SQL queries, internal variable values) even in debug builds exposed to developers.
+#### 11. Documentation debt
+No `CHANGELOG.md`, no architecture diagram, and `backend/DECISIONS.md` / `backend/TASKS.md` referenced by AGENTS.md do not exist.
 
-#### 10. `get_current_user_role` duplicates `get_current_user_id` logic
-`app/dependencies.py:11-36` has two nearly identical functions (`get_current_user_id` and `get_current_user_role`) that both decode the JWT token with identical boilerplate. A single `decode_token` dependency could return both `sub` and `role`.
+#### 12. PostGIS spatial index — currently N/A
+The schema stores geometry as `geom_wkt` (Text), not a PostGIS geometry column, so no GIST index applies yet. Revisit when a real geometry column is introduced.
 
-#### 11. No request/response logging middleware
-There is no middleware for logging requests, response times, or error rates. Debugging production issues will be difficult without structured logging.
+### Resolved
 
-#### 12. No input sanitization or validation beyond Pydantic
-Pydantic schemas handle type validation, but there is no additional sanitization for text fields (XSS prevention, SQL injection — though SQLAlchemy parameterizes queries). No request size limiting is configured.
+- **Database migrations** — initial schema migration exists (`alembic/versions/599dafc6cc34`), plus `7b41c2a9e0d5` for refresh tokens.
+- **`aiosqlite` test dependency** — declared in `pyproject.toml` dev extras.
+- **`vaderSentiment` in pyproject** — declared in main dependencies.
+- **pydantic-settings config** — `app/config.py` uses `BaseSettings` with `.env` auto-loading.
+- **Hardcoded JWT secret** — `JWT_SECRET` is now required with no built-in default.
+- **Connection pooling** — `app/database.py` configures pool size/overflow/timeout/recycle/pre-ping for Postgres.
+- **Exception handler leak** — global handler returns a generic 500 and logs the traceback server-side instead of returning `str(exc)`.
+- **Duplicated JWT decode logic** — `app/dependencies.py` shares a single `_decode_bearer_token` helper.
+- **Request/response logging** — `app/shared/request_logging.py` middleware logs method, path, status, and duration per request.
+- **Rate limiting** — `app/shared/rate_limit.py` token-bucket middleware, per-client-IP, stricter on auth endpoints, configurable via `RATE_LIMIT_*` settings.
+- **Refresh tokens** — `refresh_tokens` table, `/api/auth/refresh` and `/api/auth/logout` with rotation and revocation.
+- **Test fixtures** — `conftest.py` creates real users in the test DB and derives tokens from them.
+- **Weak `/api/places` assertion** — `test_api.py` now requires 200.
+- **Ranking test duplication** — `test_ranking.py` imports `review_confidence_score`, `popularity_score`, `freshness_score_from_days`, and `compose_final_score` from `app.modules.places.ranking`.
+- **Admin schemas/tests** — `app/modules/admin/schemas.py` response models and `tests/test_admin.py` coverage exist.
+- **Nginx config** — `deploy/nginx.conf` exists.
+- **Redis caching** — `app/shared/cache.py` helper exists and is wired into destination routes.
+- **Frontend hardcoded data** — frontend fetches the live API via `src/lib/api.ts` / `server-api.ts`.
 
-#### 13. Test fixtures use fake user IDs that don't exist in DB
-`conftest.py:54-55` creates tokens with hardcoded IDs (`"admin-user-id"`, `"test-user-id"`). When endpoints like `/api/auth/me` actually query the database for a user by this ID, they will return 404 because no user with that ID exists in the test database. Several tests may be passing falsely by coincidence (e.g., because the endpoint returns 200 but with null fields).
+### Summary of Remaining Action Items
 
-#### 14. `test_explore_endpoints_return_ok` has weak assertion
-`test_api.py:76` asserts `response.status_code in (200, 404)` for `/api/places` — this passes even when the endpoint is completely broken. Also asserts `/api/destinations` returns 200 but empty database returns empty list which is still 200, so the test is valid but weak.
-
-#### 15. `test_ranking.py` duplicates production ranking logic
-The test file `test_ranking.py` re-implements its own `_popularity_score` and `_final_score` functions (30+ lines) rather than importing from `app.modules.places.ranking`. This means the tests verify the test's own logic, not the actual production code.
-
-### Missing Features
-
-#### 16. No file/image upload endpoints
-There are no endpoints for uploading images for places, feed posts, user profiles, or food verifications. The models have image URL fields but no way to populate them.
-
-#### 17. No rate limiting
-API endpoints have no rate limiting. A malicious client can hammer any endpoint without restriction.
-
-#### 18. No pagination on list endpoints
-While `app/shared/pagination.py` exists as a utility, many list endpoints may not use it. Unbounded queries will load all rows into memory.
-
-#### 19. No email/phone verification
-User registration creates accounts without email or phone verification. The `User` model has `email_verified` and `phone_verified` fields but they are never set by any endpoint.
-
-#### 20. Admin module has no schemas or dedicated tests
-`app/modules/admin/` has `routes.py` and `service.py` but no `schemas.py` and no test coverage. Admin functionality is untested.
-
-### Frontend Issues
-
-#### 21. Frontend uses hardcoded seed data instead of live API
-The frontend `src/data/` directory contains hardcoded destinations, feed posts, and content. The SPA renders static data rather than fetching from the backend API, making the frontend appear disconnected from the backend.
-
-#### 22. Generic Next.js README
-`frontend/README.md` is the default `create-next-app` boilerplate. It provides no Tripova-specific setup instructions, no API documentation, and no guidance on connecting to the backend.
-
-#### 23. `tripova.jsx` at root is orphaned/unused
-The file `D:\Travel\tripova.jsx` at the project root appears to be a legacy or misplaced frontend entry point. It is not referenced by any build configuration.
-
-### Security Concerns
-
-#### 24. Default JWT secret in code
-`app/config.py:19` has a hardcoded default JWT secret (`"change-me-in-production-tripova-jwt-secret-key"`). If this default is ever deployed (even accidentally in a staging environment), all tokens can be forged.
-
-#### 25. No refresh token mechanism
-The auth system issues long-lived JWT tokens (default 72 hours) with no refresh token. Token revocation is impossible without a blacklist (which doesn't exist). Compromised tokens remain valid until expiry.
-
-#### 26. CORS origins include `*` pattern from env
-The `CORS_ORIGINS` env variable can easily be set to `*` by a developer in `.env`, which is insecure for production. No validation prevents this.
-
-### Data & Schema Issues
-
-#### 27. Google Places provider fails gracefully but silently
-`google_places_provider.py` will fail silently if `GOOGLE_PLACES_API_KEY` is not set. There is no warning or logging when a data provider is unavailable.
-
-#### 28. PostGIS spatial index not created in init_db
-`Base.metadata.create_all` creates the tables but does not create spatial indexes (GIST indexes on `Place.geom`). Spatial queries without indexes will be slow as the dataset grows.
-
-#### 29. Food verification score formula is naive
-`app/modules/food/service.py:89` sets `place.food_score = min(100, verification_count * 20)` — every verification adds a flat 20 points regardless of the verifier's trustworthiness or the verification quality.
-
-### Documentation Debt
-
-#### 30. No API changelog or upgrade guide
-There is no `CHANGELOG.md` or migration guide for API consumers.
-
-#### 31. `backend/DECISIONS.md` and `backend/TASKS.md` don't exist
-The AGENTS.md references these as expected documentation files, but neither exists in the project.
-
-#### 32. No architecture diagram
-The project has no visual architecture diagram (no `docs/ARCHITECTURE.md` or diagram assets).
-
----
-
-## Summary of Immediate Action Items
-
-1. Generate initial Alembic migration
-2. Add `aiosqlite` to test dependencies
-3. Add `vaderSentiment` to `pyproject.toml`
-4. Convert `config.py` to use pydantic-settings `BaseSettings`
-5. Configure database connection pooling
-6. Fix test fixtures to create real test users in DB
-7. Wire up Redis caching for high-traffic endpoints
-8. Remove hardcoded JWT secret default in production config
-9. Set up nginx reverse proxy configuration
-10. Add rate limiting middleware
+1. Wire a background worker (Celery/RQ) for offline pack generation and ingestion sync
+2. Add image upload endpoints
+3. Implement email/phone verification flow
+4. Audit remaining list endpoints for pagination
+5. Add logging when data providers are unavailable (Google Places)
+6. Trust-weight the food verification score formula
+7. Validate CORS origins; reject `*` in production
+8. Replace frontend README boilerplate; add CHANGELOG and architecture diagram

@@ -11,6 +11,10 @@ from app.security import create_access_token
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///./test_tripova.db"
 
+# The functional suite hammers the API far faster than any real client;
+# rate limiting is exercised explicitly in test_rate_limit.py.
+settings.RATE_LIMIT_ENABLED = False
+
 
 @pytest.fixture(scope="session")
 def event_loop():
@@ -51,13 +55,47 @@ async def client(test_session) -> AsyncGenerator:
 
 
 @pytest.fixture
-async def admin_token():
-    return create_access_token("admin-user-id", "ADMIN")
+async def test_user(test_session):
+    from app.modules.users.models import User
+    from app.security import hash_password
+
+    user = User(
+        name="Fixture User",
+        email="fixtureuser@example.com",
+        password_hash=hash_password("password123"),
+        role="USER",
+    )
+    test_session.add(user)
+    await test_session.flush()
+    await test_session.refresh(user)
+    return user
 
 
 @pytest.fixture
-async def user_token():
-    return create_access_token("test-user-id", "USER")
+async def admin_user(test_session):
+    from app.modules.users.models import User
+    from app.security import hash_password
+
+    user = User(
+        name="Fixture Admin",
+        email="fixtureadmin@example.com",
+        password_hash=hash_password("password123"),
+        role="ADMIN",
+    )
+    test_session.add(user)
+    await test_session.flush()
+    await test_session.refresh(user)
+    return user
+
+
+@pytest.fixture
+async def admin_token(admin_user):
+    return create_access_token(str(admin_user.id), admin_user.role)
+
+
+@pytest.fixture
+async def user_token(test_user):
+    return create_access_token(str(test_user.id), test_user.role)
 
 
 @pytest.fixture

@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import type { Theme } from "@/data";
-import { Icon } from "../icon";
+import { LogoMark } from "../logo";
 import { useAuth } from "./auth-context";
 
 interface RegisterScreenProps {
@@ -45,10 +45,10 @@ export function RegisterScreen({ t, onSwitch, onSuccess }: RegisterScreenProps) 
   return (
     <div style={{ padding: "40px 24px", maxWidth: 400, margin: "0 auto" }}>
       <div style={{ textAlign: "center", marginBottom: 36 }}>
-        <div style={{ width: 56, height: 56, borderRadius: 16, background: t.accent, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
-          <Icon name="Compass" size={28} color={t.goldFill} />
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 4 }}>
+          <LogoMark size={64} rounded={18} />
         </div>
-        <h1 style={{ fontSize: 24, fontWeight: 800, color: t.heading, letterSpacing: 2, margin: "0 0 4px" }}>TRIPOVA</h1>
+        <h1 style={{ fontFamily: "var(--font-dm-serif), Georgia, serif", fontSize: 30, fontWeight: 400, color: t.heading, margin: "12px 0 4px" }}>Tripsova</h1>
         <p style={{ fontSize: 13, color: t.muted, margin: 0 }}>Join the traveller community</p>
       </div>
       <form onSubmit={handleSubmit}>

@@ -186,7 +186,7 @@ export function DestinationHub({ t, destId, openPods, openPureFind }: { t: Theme
           <div style={{ background: `linear-gradient(135deg,${t.accent}12,${t.secondary}08)`, borderRadius: 16, border: `1px solid ${t.accent}20`, padding: 16 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
               <div style={{ width: 30, height: 30, borderRadius: 9, background: t.accent, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="Sparkles" size={16} color={t.goldFill} /></div>
-              <div style={{ fontSize: 14 }}>Tripova AI · trained on traveller posts</div>
+              <div style={{ fontSize: 14 }}>Tripsova AI · trained on traveller posts</div>
             </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
               {aiQs.map(q => <button key={q} onClick={() => setAi(q)} style={{ padding: "7px 13px", borderRadius: 20, border: `1px solid ${ai === q ? t.accent : t.border}`, background: ai === q ? t.accent + "15" : t.card, color: ai === q ? t.accent : t.text, fontSize: 12.5, fontWeight: 600, cursor: "pointer", transition: "all 0.18s" }}>{q}</button>)}

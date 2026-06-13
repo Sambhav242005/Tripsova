@@ -253,8 +253,74 @@ export interface TripGenerateRequest {
   travelStyle?: string[];
   dietPreference?: string[];
   tripType: string;
+  // Legacy mode (LAND/AIR/WATER) or a transport (CAR/TRAIN/BUS/FLIGHT/FERRY/…).
+  travelMode?: TransportKey | "LAND" | "AIR" | "WATER";
   startDate?: string;
   offlineRequired?: boolean;
+}
+
+export type TransportKey =
+  | "CAR" | "MOTORCYCLE" | "TRAIN" | "BUS" | "METRO"
+  | "BICYCLE" | "WALK" | "FLIGHT" | "FERRY" | "CRUISE";
+
+export interface RoutePoint { name: string; latitude: number; longitude: number; }
+export interface RouteLeg { origin: RoutePoint; destination: RoutePoint; transport: TransportKey; }
+export interface RoutePlanRequest {
+  origin?: RoutePoint;
+  destination?: RoutePoint;
+  travelMode?: string;
+  transport?: TransportKey;
+  legs?: RouteLeg[];
+  departureTime?: string;
+  // Persistence: attach to an existing trip, or save as a new standalone trip.
+  tripId?: string;
+  save?: boolean;
+}
+
+// Smart journey: the engine picks the modes from just two city names.
+export interface JourneyPlanRequest {
+  origin: string;
+  destination: string;
+  roundTrip?: boolean;
+  peopleCount?: number;
+  budget?: number;
+  departureTime?: string;
+}
+
+export interface JourneyCostLeg {
+  transport: TransportKey;
+  label?: string | null;
+  from?: string | null;
+  to?: string | null;
+  distanceKm?: number | null;
+  estimatedCost: number;
+}
+
+export interface JourneyCost {
+  currency: string;
+  people: number;
+  perLeg: JourneyCostLeg[];
+  total: number;
+  perPerson: number;
+}
+
+export interface JourneyGeoResolved {
+  resolvedName: string;
+  source: string; // "db" | "nominatim"
+}
+
+export interface JourneyPlanResponse {
+  origin: RoutePoint;
+  destination: RoutePoint;
+  roundTrip: boolean;
+  peopleCount: number;
+  chosenModes: TransportKey[];
+  geocoding: { origin: JourneyGeoResolved; destination: JourneyGeoResolved };
+  cost: JourneyCost;
+  budget?: number | null;
+  withinBudget?: boolean | null;
+  // Full route_planner output (legs, segments, overnight/fuel stops, notes…).
+  route: Record<string, unknown>;
 }
 
 export interface TripGenerateResponse {
@@ -265,6 +331,10 @@ export interface TripGenerateResponse {
   estimatedBudget: Record<string, unknown>;
   safetyNotes: string[];
   offlinePackSuggested: boolean;
+  travelMode?: string;
+  fuelStops?: Record<string, unknown>[];
+  aiGenerated?: boolean;
+  tripId?: string;
 }
 
 export interface TripResponse {

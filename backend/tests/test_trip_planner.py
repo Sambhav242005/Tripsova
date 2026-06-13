@@ -79,8 +79,11 @@ class TestPlaceScoring:
         planner._score_places()
         assert planner.scored_places == []
 
-    def test_adventure_place_outranks_cafe_for_adventure_style(self):
-        """Adventure-style user should rank a TREK above a CAFE."""
+    def test_adventure_place_outranks_hotel_for_adventure_style(self):
+        """Adventure-style user should rank a TREK above a HOTEL (a non-adventure attraction).
+
+        CAFE/RESTAURANT are food venues scored separately by ``_score_food``, so the
+        attraction ranking is compared against another genuine attraction type."""
         class MockPlace:
             def __init__(self, ptype, rating=80, reviews=100, score=70):
                 self.id = "mock"
@@ -115,14 +118,14 @@ class TestPlaceScoring:
         planner.trip_type = "SOLO"
         planner.travel_styles = ["adventure"]
         planner.diet_preferences = []
-        planner.all_places = [MockPlace("TREK", 90, 500, 85), MockPlace("CAFE", 90, 500, 85)]
+        planner.all_places = [MockPlace("TREK", 90, 500, 85), MockPlace("HOTEL", 90, 500, 85)]
         planner.scored_places = []
         planner.scored_food = []
 
         planner._score_places()
         assert len(planner.scored_places) == 2
         assert planner.scored_places[0]["place"]["type"] == "TREK", "TREK should rank first for adventure style"
-        assert planner.scored_places[1]["place"]["type"] == "CAFE"
+        assert planner.scored_places[1]["place"]["type"] == "HOTEL"
 
     def test_style_match_bonus_dominates_equal_ratings(self):
         """With identical ratings, style match determines ranking."""
@@ -158,16 +161,16 @@ class TestPlaceScoring:
         planner.budget = 10000
         planner.people_count = 1
         planner.trip_type = "SOLO"
-        planner.travel_styles = ["food"]
+        planner.travel_styles = ["cultural"]
         planner.diet_preferences = []
-        planner.all_places = [MockPlace("CAFE"), MockPlace("TREK")]
+        planner.all_places = [MockPlace("HOTEL"), MockPlace("TOURIST_SPOT")]
         planner.scored_places = []
         planner.scored_food = []
 
         planner._score_places()
-        # CAFE (matches food style) should outrank TREK (doesn't match)
-        assert planner.scored_places[0]["place"]["type"] == "CAFE"
-        assert planner.scored_places[1]["place"]["type"] == "TREK"
+        # TOURIST_SPOT (matches cultural style) should outrank HOTEL (doesn't match)
+        assert planner.scored_places[0]["place"]["type"] == "TOURIST_SPOT"
+        assert planner.scored_places[1]["place"]["type"] == "HOTEL"
 
 
 # ─── Food scoring with diet awareness ─────────────────────────────────────────
@@ -386,10 +389,14 @@ class TestTripPlannerE2E:
         planner.trip_type = "COUPLE"
         planner.travel_styles = ["nature", "food"]
         planner.diet_preferences = ["PURE_VEG"]
+        planner.travel_mode = "LAND"
+        planner.refuel_relevant = True
+        planner.travel_medium = "LAND"
         planner.destination = None
         planner.all_places = []
         planner.scored_places = []
         planner.scored_food = []
+        planner.fuel_places = []
 
         # This simulates what happens when the DB has no data
         result = await planner.build()

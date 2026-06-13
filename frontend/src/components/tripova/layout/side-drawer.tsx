@@ -21,7 +21,9 @@ export function SideDrawer() {
     { id: "profile", icon: "User", label: "Profile" },
   ];
   const manage = [
+    { id: "journey", icon: "Navigation", label: "Plan My Journey" },
     { id: "plan", icon: "Sparkles", label: "AI Trip Builder" },
+    { id: "route", icon: "Route", label: "Route Planner" },
     { id: "guides", icon: "Map", label: "Local Guides" },
     { id: "family", icon: "Users", label: "Family Circle" },
     { id: "budget", icon: "Wallet", label: "Budget Tracker" },

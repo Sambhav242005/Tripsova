@@ -4,36 +4,52 @@ import React, { useState } from "react";
 import type { Theme } from "@/data";
 import { Card, Btn, InputF } from "../primitives/index";
 import { MultiSelectFood, FoodBadge } from "../badges/index";
+import { Icon } from "../icon";
+import { useApp } from "../app-provider";
 import { api } from "@/lib/api";
-import type { TripGenerateRequest, TripGenerateResponse } from "@/lib/types";
+import type { TransportKey, TripGenerateRequest, TripGenerateResponse } from "@/lib/types";
 
 export function PlanScreen({ t }: { t: Theme }) {
-  const [form, setForm] = useState({ destination: "", days: "4", groupType: "Friends", budget: "10000", interests: [] as string[], foods: [] as string[], groupMode: false, members: [{ name: "Person 1", foods: [] as string[] }] });
+  const { setSub } = useApp();
+  const [form, setForm] = useState({ destination: "", days: "4", groupType: "Friends", travelMode: "CAR" as TransportKey, budget: "10000", interests: [] as string[], foods: [] as string[], groupMode: false, members: [{ name: "Person 1", foods: [] as string[] }] });
   const [loading, setLoading] = useState(false);
+  const [fuelStops, setFuelStops] = useState<Record<string, unknown>[]>([]);
   const [itinerary, setItinerary] = useState<{
     destination: string; totalCost: string; activeFoods: string[]; days: Record<string, unknown>[]; tips: string[];
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const groupTypes = [{ id: "Solo", icon: "🧍" }, { id: "Couple", icon: "👫" }, { id: "Family", icon: "👨‍👩‍👧" }, { id: "Friends", icon: "👯" }];
+  // Each transport carries its own behaviour; refuel === true means fuel stops are shown.
+  const travelModes: { id: TransportKey; icon: string; label: string; refuel: boolean }[] = [
+    { id: "CAR", icon: "🚗", label: "Car", refuel: true },
+    { id: "MOTORCYCLE", icon: "🏍️", label: "Bike", refuel: true },
+    { id: "TRAIN", icon: "🚆", label: "Train", refuel: false },
+    { id: "BUS", icon: "🚌", label: "Bus", refuel: false },
+    { id: "FLIGHT", icon: "✈️", label: "Flight", refuel: false },
+    { id: "FERRY", icon: "⛴️", label: "Ferry", refuel: false },
+  ];
+  const currentMode = travelModes.find(m => m.id === form.travelMode);
   const interests = ["Adventure", "Nature", "Food", "Culture", "Spiritual", "Photography", "Shopping", "Wellness"];
   const toggleI = (i: string) => setForm(f => ({ ...f, interests: f.interests.includes(i) ? f.interests.filter(x => x !== i) : [...f.interests, i] }));
 
   const generate = async () => {
     if (!form.destination) { setError("Please enter a destination"); return; }
-    setLoading(true); setItinerary(null); setError(null);
+    setLoading(true); setItinerary(null); setError(null); setFuelStops([]);
     const body: TripGenerateRequest = {
       destination: form.destination,
       days: parseInt(form.days),
       budget: parseInt(form.budget),
       peopleCount: form.groupType === "Solo" ? 1 : form.groupType === "Couple" ? 2 : 4,
       tripType: form.groupType,
+      travelMode: form.travelMode,
     };
     if (form.interests.length > 0) body.travelStyle = form.interests;
     if (form.foods.length > 0) body.dietPreference = form.foods;
     try {
       const res = await api.post<TripGenerateResponse>("/api/trips/generate", body);
       setItinerary(transformResponse(res, form));
+      setFuelStops(res.fuelStops || []);
     } catch {
       try {
         setItinerary(mockGenerate(form));
@@ -82,7 +98,7 @@ export function PlanScreen({ t }: { t: Theme }) {
       tips: res.safetyNotes?.length > 0 ? res.safetyNotes : [
         `Book accommodation in ${form.destination} at least 2 weeks ahead in peak season`,
         (form.foods as string[])?.includes("jain") ? "Call ahead to confirm Jain preparation" : "Ask locals for hidden gems",
-        form.groupType === "Solo" ? "Join local traveller WhatsApp groups for safety" : "Tripova's Budget Tracker splits all expenses automatically",
+        form.groupType === "Solo" ? "Join local traveller WhatsApp groups for safety" : "Tripsova's Budget Tracker splits all expenses automatically",
         "Carry backup snacks from a local grocery — especially useful in remote areas",
       ],
     } as ItineraryResult;
@@ -106,7 +122,7 @@ export function PlanScreen({ t }: { t: Theme }) {
     const tips = [
       `Book accommodation in ${form.destination} at least 2 weeks ahead in peak season`,
       formFoods?.includes("jain") ? "Call ahead to confirm Jain preparation" : "Ask locals for hidden gems",
-      form.groupType === "Solo" ? "Join local traveller WhatsApp groups for safety" : "Tripova's Budget Tracker splits all expenses automatically",
+      form.groupType === "Solo" ? "Join local traveller WhatsApp groups for safety" : "Tripsova's Budget Tracker splits all expenses automatically",
       "Carry backup snacks from a local grocery — especially useful in remote areas",
     ];
     return { destination: form.destination as string, totalCost: `₹${form.budget}`, activeFoods: formFoods, days, tips } as ItineraryResult;
@@ -114,6 +130,17 @@ export function PlanScreen({ t }: { t: Theme }) {
 
   return (
     <div style={{ padding: "0 16px 110px" }}>
+      <button onClick={() => { setSub("route"); window.scrollTo(0, 0); }}
+        style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "13px 16px", marginBottom: 14, borderRadius: 14, border: `1px solid ${t.accent}25`, background: `linear-gradient(135deg,${t.accent}12,${t.secondary}0A)`, cursor: "pointer", textAlign: "left" }}>
+        <span style={{ width: 38, height: 38, borderRadius: 10, background: t.accent + "15", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <Icon name="Route" size={19} color={t.accent} />
+        </span>
+        <span style={{ flex: 1 }}>
+          <span style={{ display: "block", fontSize: 14, fontWeight: 700, color: t.text }}>Plan the route &amp; map</span>
+          <span style={{ display: "block", fontSize: 12, color: t.muted, marginTop: 1 }}>Multi-leg journey, travel times, overnight &amp; fuel stops</span>
+        </span>
+        <Icon name="ChevronRight" size={18} color={t.muted} />
+      </button>
       <Card t={t}>
         <div style={{ fontSize: 18, fontWeight: 700, color: t.text, marginBottom: 18 }}>✦ Build My Trip</div>
         <InputF label="Destination" value={form.destination} onChange={e => setForm(f => ({ ...f, destination: e.target.value }))} placeholder="Manali, Goa, Spiti, Udaipur..." t={t} />
@@ -129,6 +156,19 @@ export function PlanScreen({ t }: { t: Theme }) {
                 <span style={{ fontSize: 18 }}>{g.icon}</span>{g.id}
               </button>
             ))}
+          </div>
+        </div>
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 9, fontWeight: 700, color: t.muted, letterSpacing: 2.5, textTransform: "uppercase", marginBottom: 8 }}>How are you getting there?</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 6 }}>
+            {travelModes.map(m => (
+              <button key={m.id} onClick={() => setForm(f => ({ ...f, travelMode: m.id }))} style={{ padding: "9px 4px", borderRadius: 8, border: `1.5px solid ${form.travelMode === m.id ? t.accent : t.border}`, background: form.travelMode === m.id ? t.accent + "12" : t.tag, color: form.travelMode === m.id ? t.accent : t.muted, fontSize: 10, fontWeight: 700, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, transition: "all 0.18s" }}>
+                <span style={{ fontSize: 17 }}>{m.icon}</span>{m.label}
+              </button>
+            ))}
+          </div>
+          <div style={{ fontSize: 11, color: t.muted, marginTop: 6, fontStyle: "italic" }}>
+            {currentMode?.refuel ? "Self-driven — petrol-pump stops will be suggested along the way" : "You're a passenger — no fuel stops (you don't refuel a " + (currentMode?.label.toLowerCase() ?? "vehicle") + ")"}
           </div>
         </div>
         <div style={{ marginBottom: 14 }}>
@@ -177,6 +217,19 @@ export function PlanScreen({ t }: { t: Theme }) {
               })}
             </Card>
           ))}
+          {fuelStops.length > 0 && (
+            <Card t={t}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: t.text, marginBottom: 12 }}>⛽ Fuel Stops Nearby</div>
+              <div style={{ fontSize: 12, color: t.muted, marginBottom: 10 }}>Real petrol pumps around {itinerary.destination} for your road trip.</div>
+              {fuelStops.map((fs, i) => (
+                <div key={String(fs.id ?? i)} style={{ marginBottom: 9, paddingLeft: 12, borderLeft: `2px solid ${t.accent}` }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: t.text }}>{String(fs.name ?? "Petrol pump")}</div>
+                  {fs.address ? <div style={{ fontSize: 12, color: t.muted }}>{String(fs.address)}</div> : null}
+                  {fs.phone ? <div style={{ fontSize: 11, color: t.secondary, marginTop: 2 }}>📞 {String(fs.phone)}</div> : null}
+                </div>
+              ))}
+            </Card>
+          )}
           <Card t={t}>
             <div style={{ fontSize: 14, fontWeight: 700, color: t.text, marginBottom: 12 }}>💡 Pro Tips</div>
             {itinerary.tips.map((tip: string, i: number) => <div key={i} style={{ fontSize: 13, color: t.muted, marginBottom: 9, paddingLeft: 12, borderLeft: `2px solid ${t.secondary}`, lineHeight: 1.6 }}>{tip}</div>)}

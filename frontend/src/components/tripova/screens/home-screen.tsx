@@ -366,7 +366,7 @@ export function HomeScreen({ t, openDest, createdPosts = [] }: { t: Theme; openD
           <div style={{ fontSize: 13, color: t.muted, marginTop: 6, lineHeight: 1.5 }}>Be the first to share a travel update from your trip!</div>
         </div>
       ) : (
-        feedItems.map((post, idx) => <PostCard key={post.id} post={post} t={t} openDest={openDest} idx={idx} />)
+        feedItems.map((post, idx) => <PostCard key={post._apiId ?? post.id} post={post} t={t} openDest={openDest} idx={idx} />)
       )}
 
       <div style={{ marginTop: 4, marginBottom: 24 }}>
