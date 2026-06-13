@@ -52,8 +52,8 @@ services:
       dockerfile: frontend/Dockerfile
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
-    # No host port mapping — in production, access via the nginx proxy (port 80).
-    # Direct frontend access was removed to prevent Local Network Access prompts.
+    ports:
+      - "5174:5173"
     environment:
       API_URL_INTERNAL: ${API_URL_INTERNAL:-http://backend:8010}
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
