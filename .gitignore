@@ -10,20 +10,24 @@ build/
 venv/
 env/
 
+# Database files
+*.db
+test_*.db
+
 # Backend
 backend/.env
-backend/tripova.db
-backend/*.db
 backend/.pytest_cache/
 
 # Node
 node_modules/
 .next/
 *.tsbuildinfo
+test-results/
 
 # IDE
 .vscode/
 .idea/
+.serena/
 *.swp
 *.swo
 *~
