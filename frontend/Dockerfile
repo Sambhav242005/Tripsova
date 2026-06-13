@@ -2,8 +2,14 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-ARG NEXT_PUBLIC_API_URL
-ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+# This stack serves the frontend and API behind ONE origin (nginx -> Cloudflare),
+# so the browser must call the API with RELATIVE URLs. Hardcode the public API
+# base to empty so a stray deploy/.env can never bake a private IP (e.g.
+# http://192.168.1.5:8010) into the client bundle -- that would make the browser
+# fetch a LAN address from a public HTTPS page and trigger the "Access other
+# devices on your local network" permission prompt (plus mixed-content). SSR uses
+# the server-only API_URL_INTERNAL instead (see frontend/src/lib/server-api.ts).
+ENV NEXT_PUBLIC_API_URL=""
 
 COPY frontend/package*.json ./
 RUN npm ci

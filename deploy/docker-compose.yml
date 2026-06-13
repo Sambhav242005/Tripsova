@@ -50,13 +50,16 @@ services:
     build:
       context: ..
       dockerfile: frontend/Dockerfile
-      args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
+      # NOTE: deliberately NO NEXT_PUBLIC_API_URL build arg. The browser talks to
+      # the API through nginx on the same origin via RELATIVE URLs. Baking a host
+      # here (e.g. a LAN IP from deploy/.env) freezes it into the client JS and
+      # triggers the browser's Local Network Access prompt. The Dockerfile pins it
+      # to empty so this can't happen.
     ports:
       - "5174:5173"
     environment:
+      # Server-side only (SSR / metadata fetches). Never reaches the browser.
       API_URL_INTERNAL: ${API_URL_INTERNAL:-http://backend:8010}
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:5173/ >/dev/null"]
