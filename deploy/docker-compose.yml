@@ -51,7 +51,7 @@ services:
       context: ..
       dockerfile: frontend/Dockerfile
     ports:
-      - "5173:5173"
+      - "5174:5173"
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://backend:8010}
     restart: unless-stopped
