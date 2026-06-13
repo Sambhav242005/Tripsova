@@ -3,7 +3,9 @@ services:
     # PostGIS image (not plain postgres) — the app uses ST_DWithin / geography
     # functions for nearby search. The postgis extension is enabled by the
     # initial Alembic migration.
-    image: postgis/postgis:16-3.4-alpine
+    # Non-alpine variant has native ARM64 support (required for Raspberry Pi).
+    # The alpine tag is amd64-only and will fail on ARM64 hosts.
+    image: postgis/postgis:16-3.4
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
