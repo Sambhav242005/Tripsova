@@ -3,6 +3,13 @@ import { getDestinations, getFoodPlaces } from "@/lib/server-api";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://tripsova.com";
 
+// Render at request time, not at build. The sitemap pulls live data from the
+// backend (via API_URL_INTERNAL), which only exists when the stack is running --
+// during `docker build` the backend is unreachable, so prerendering this route
+// hangs every fetch until Next's 60s static-generation timeout and fails the
+// build. force-dynamic defers generation to runtime where the backend is up.
+export const dynamic = "force-dynamic";
+
 // Dynamic: enumerates every traveller-verified destination and food place from the
 // API so search engines can crawl the SSR content routes under /destinations/[slug]
 // and /food/[slug].
