@@ -35,7 +35,7 @@ export function BudgetScreen({ t }: { t: Theme }) {
   };
 
   return (
-    <div style={{ padding: "0 16px 110px" }}>
+    <div style={{ padding: "0 16px 16px" }}>
       <div style={{ background: `linear-gradient(135deg,${t.accent}12,${t.secondary}08)`, borderRadius: 12, padding: "13px 16px", marginBottom: 20, border: `1px solid ${t.accent}15` }}>
         <div style={{ fontSize: 14, color: t.accent, fontWeight: 700 }}>💰 Budget Tracker</div>
         <div style={{ fontSize: 12, color: t.muted, fontStyle: "italic", marginTop: 2 }}>Split expenses. Zero awkwardness.</div>

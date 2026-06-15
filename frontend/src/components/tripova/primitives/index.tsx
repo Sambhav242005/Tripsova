@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useId, useState } from "react";
 import type { Theme } from "@/data";
 
 export function Divider({ t }: { t: Theme }) {
@@ -127,12 +127,14 @@ export function InputF({
   placeholder?: string; type?: string; t: Theme;
 }) {
   const [focused, setFocused] = useState(false);
+  const id = useId();
   return (
     <div style={{ marginBottom: 16 }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: t.muted, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 7 }}>
+      <label htmlFor={id} style={{ display: "block", fontSize: 11, fontWeight: 700, color: t.muted, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 7 }}>
         {label}
-      </div>
+      </label>
       <input
+        id={id}
         type={type}
         value={value}
         onChange={onChange}

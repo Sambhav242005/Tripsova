@@ -1,3 +1,5 @@
+import uuid
+
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -5,6 +7,13 @@ from app.modules.feed.models import FeedPost
 from app.shared.errors import NotFoundError
 from app.shared.pagination import PaginatedResult, PaginatedParams, paginate_query
 from app.shared.utils import utcnow
+
+
+def _to_uuid(value: str, message: str = "Feed post not found") -> uuid.UUID:
+    try:
+        return value if isinstance(value, uuid.UUID) else uuid.UUID(str(value))
+    except (ValueError, TypeError):
+        raise NotFoundError(message)
 
 
 async def get_feed_posts(
@@ -28,7 +37,7 @@ async def get_feed_posts(
 
 async def create_feed_post(db: AsyncSession, user_id: str, data: dict) -> FeedPost:
     post = FeedPost(
-        user_id=user_id,
+        user_id=_to_uuid(user_id, "User not found"),
         destination_id=data.get("destination_id"),
         place_id=data.get("place_id"),
         content=data.get("content", ""),
@@ -46,7 +55,7 @@ async def create_feed_post(db: AsyncSession, user_id: str, data: dict) -> FeedPo
 
 
 async def mark_helpful(db: AsyncSession, post_id: str) -> None:
-    result = await db.execute(select(FeedPost).where(FeedPost.id == post_id))
+    result = await db.execute(select(FeedPost).where(FeedPost.id == _to_uuid(post_id)))
     post = result.scalar_one_or_none()
     if not post:
         raise NotFoundError("Feed post not found")
@@ -55,7 +64,7 @@ async def mark_helpful(db: AsyncSession, post_id: str) -> None:
 
 
 async def report_post(db: AsyncSession, post_id: str) -> None:
-    result = await db.execute(select(FeedPost).where(FeedPost.id == post_id))
+    result = await db.execute(select(FeedPost).where(FeedPost.id == _to_uuid(post_id)))
     post = result.scalar_one_or_none()
     if not post:
         raise NotFoundError("Feed post not found")

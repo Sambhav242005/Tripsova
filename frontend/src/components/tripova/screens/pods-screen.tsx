@@ -106,7 +106,7 @@ export function PodsScreen({ t }: { t: Theme }) {
   const displayPods = apiItems ?? [];
 
   return (
-    <div style={{ padding: "16px 16px 110px" }}>
+    <div style={{ padding: "16px 16px 16px" }}>
       <ScreenHeader t={t} eyebrow="Travel together" title="TripPods" subtitle="Find verified companions heading your way." />
       <div style={{ display: "flex", background: t.tag, borderRadius: 12, padding: 3, marginBottom: 20 }}>
         {["find", "mine"].map(tb => (

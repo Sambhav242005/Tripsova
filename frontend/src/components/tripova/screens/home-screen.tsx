@@ -115,14 +115,14 @@ function PostCard({ post, t, openDest }: { post: FeedPost; t: Theme; openDest?: 
     <div
       onClick={() => post.destId && openDest && openDest(post.destId)}
       style={{
-        background: t.card, borderRadius: 20, padding: 18, marginBottom: 14,
+        background: t.card, borderRadius: 18, padding: 16, marginBottom: 12,
         border: `1px solid ${t.border}`,
         boxShadow: `0 1px 3px ${t.overlay}, 0 4px 12px ${t.overlay}`,
         cursor: openDest ? "pointer" : "default",
         transition: "box-shadow 0.2s, transform 0.2s",
       }}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, marginBottom: 12 }}>
         <div style={{ display: "flex", gap: 11, alignItems: "center", minWidth: 0 }}>
           <Avatar initials={post.avatar} size={40} t={t} />
           <div style={{ minWidth: 0 }}>
@@ -135,7 +135,7 @@ function PostCard({ post, t, openDest }: { post: FeedPost; t: Theme; openDest?: 
             </div>
           </div>
         </div>
-        <TrustBadge score={post.score} t={t} />
+        <span style={{ flexShrink: 0 }}><TrustBadge score={post.score} t={t} /></span>
       </div>
       <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
         <span style={{
@@ -329,12 +329,40 @@ export function HomeScreen({ t, openDest, openTab, createdPosts = [] }: { t: The
   const feedItems: FeedPost[] = loading ? [] : [...allCreated, ...apiPosts];
 
   return (
-    <div style={{ padding: "16px 16px 110px" }}>
+    <div style={{ padding: "12px 12px 16px" }}>
       {/* ───────────────────────── 1 · CityFeed ───────────────────────── */}
       <SectionHeader t={t} eyebrow="Your city · Live" title="CityFeed" subtitle="Fresh, time-sensitive updates from travellers around you." />
       <div style={{ marginBottom: 14, display: "flex", justifyContent: "flex-end" }}>
         <PoweredBy t={t} />
       </div>
+
+      {!loading && !error && (
+        <div style={{
+          display: "flex", gap: 12, alignItems: "center",
+          background: `linear-gradient(135deg,${t.accent}12,${t.secondary}0A)`,
+          border: `1px solid ${t.accent}20`,
+          borderRadius: 16,
+          padding: "13px 14px",
+          marginBottom: 12,
+        }}>
+          <div style={{ width: 42, height: 42, borderRadius: 12, background: t.card, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <Icon name={feedItems.length > 0 ? "Radio" : "MessageCirclePlus"} size={20} color={t.accent} />
+          </div>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 800, color: t.heading }}>
+              {feedItems.length > 0 ? `${feedItems.length} live traveller update${feedItems.length === 1 ? "" : "s"}` : "CityFeed is waiting for first posts"}
+            </div>
+            <div style={{ fontSize: 12.5, color: t.muted, lineHeight: 1.45, marginTop: 2 }}>
+              {feedItems.length > 0 ? "Sorted by fresh, traveller-powered context." : "Explore Trip Pulse or create the first local update from your journey."}
+            </div>
+          </div>
+          {openTab && (
+            <button onClick={() => openTab("discover")} style={{ flexShrink: 0, border: `1px solid ${t.border}`, background: t.card, color: t.accent, borderRadius: 10, padding: "8px 10px", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
+              Trip Pulse
+            </button>
+          )}
+        </div>
+      )}
 
       {error && (
         <div style={{
@@ -374,7 +402,7 @@ export function HomeScreen({ t, openDest, openTab, createdPosts = [] }: { t: The
         ))
       ) : !error && feedItems.length === 0 ? (
         <div style={{
-          textAlign: "center", padding: "48px 24px",
+          textAlign: "center", padding: "34px 20px",
           background: t.card, borderRadius: 20, border: `1px solid ${t.border}`,
         }}>
           <div style={{
@@ -384,8 +412,13 @@ export function HomeScreen({ t, openDest, openTab, createdPosts = [] }: { t: The
           }}>
             <Icon name="MessageCircle" size={28} color={t.muted} />
           </div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: t.heading }}>No posts yet</div>
-          <div style={{ fontSize: 13, color: t.muted, marginTop: 6, lineHeight: 1.5 }}>Be the first to share a travel update from your trip!</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: t.heading }}>No city posts yet</div>
+          <div style={{ fontSize: 13, color: t.muted, marginTop: 6, lineHeight: 1.5 }}>CityFeed will fill with recent traveller updates. Until then, Trip Pulse still shows active destinations from live data.</div>
+          {openTab && (
+            <button onClick={() => openTab("discover")} style={{ marginTop: 16, padding: "10px 14px", borderRadius: 10, border: "none", background: t.accent, color: "#fff", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>
+              Open Trip Pulse
+            </button>
+          )}
         </div>
       ) : (
         feedItems.map(post => <PostCard key={post._apiId ?? post.id} post={post} t={t} openDest={openDest} />)

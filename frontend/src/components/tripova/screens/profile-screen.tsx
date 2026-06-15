@@ -3,7 +3,7 @@
 import React, { useState, useEffect, startTransition } from "react";
 import type { Theme } from "@/data";
 import { LANGUAGES } from "@/data/feed";
-import { Card, Btn } from "../primitives/index";
+import { Card, Btn, InputF } from "../primitives/index";
 import { Icon } from "../icon";
 import { TrustBadge, MultiSelectFood } from "../badges/index";
 import { api, isAuthenticated, ApiError } from "@/lib/api";
@@ -60,13 +60,19 @@ function parseTrustComponents(components: Record<string, unknown>, t: Theme): Tr
 }
 
 export function ProfileScreen({ t, lang, setLang, go }: { t: Theme; lang: string; setLang: (l: string) => void; go: (id: string) => void }) {
-  const { logout } = useAuth();
+  const { logout, refreshUser } = useAuth();
   const [myFoods, setMyFoods] = useState(["jain", "pure_veg"]);
   const [user, setUser] = useState<UserResponse | null>(null);
   const [trustScore, setTrustScore] = useState<TrustScoreResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editAvatarUrl, setEditAvatarUrl] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -117,7 +123,7 @@ export function ProfileScreen({ t, lang, setLang, go }: { t: Theme; lang: string
   const stats = [
     { label: "Trips", value: "—" },
     { label: "Countries", value: "—" },
-    { label: "Pods", value: "—" },
+    { label: "TripPods", value: "—" },
     { label: "Reviews", value: "—" },
   ];
   const trustBars: TrustBar[] = trustScore?.components
@@ -127,15 +133,48 @@ export function ProfileScreen({ t, lang, setLang, go }: { t: Theme; lang: string
     { id: "journey", icon: "Navigation", label: "Plan My Journey" },
     { id: "plan", icon: "Sparkles", label: "AI Trip Builder" },
     { id: "route", icon: "Route", label: "Route Planner" },
-    { id: "guides", icon: "Map", label: "Local Guides" },
-    { id: "family", icon: "Users", label: "Family Circle" },
     { id: "budget", icon: "Wallet", label: "Budget Tracker" },
     { id: "maps", icon: "MapPinned", label: "Offline Maps" },
   ];
 
+  const openEdit = () => {
+    setEditName(user?.name || "");
+    setEditPhone(user?.phone || "");
+    setEditAvatarUrl(user?.avatar_url || "");
+    setSaveError(null);
+    setEditing(true);
+  };
+
+  const saveProfile = async () => {
+    const name = editName.trim();
+    if (!name) {
+      setSaveError("Name is required.");
+      return;
+    }
+
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const updated = await api.put<UserResponse>("/api/users/me", {
+        name,
+        phone: editPhone.trim() || undefined,
+        avatar_url: editAvatarUrl.trim() || undefined,
+      });
+      startTransition(() => {
+        setUser(updated);
+        setEditing(false);
+      });
+      await refreshUser();
+    } catch (err) {
+      setSaveError(err instanceof ApiError ? err.message : "Could not save profile.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) {
     return (
-      <div style={{ padding: "0 16px 110px" }}>
+      <div style={{ padding: "0 12px 16px" }}>
         <Card t={t} style={{ overflow: "hidden", padding: 0 }}>
           <div style={{ height: 78, background: t.border }} />
           <div style={{ padding: "0 16px 18px" }}>
@@ -158,7 +197,7 @@ export function ProfileScreen({ t, lang, setLang, go }: { t: Theme; lang: string
 
   if (error === "not_authenticated") {
     return (
-      <div style={{ padding: "0 16px 110px" }}>
+      <div style={{ padding: "0 12px 16px" }}>
         <Card t={t} style={{ textAlign: "center", padding: "40px 20px" }}>
           <Icon name="UserRound" size={40} color={t.muted} />
           <div style={{ fontSize: 18, fontWeight: 700, color: t.text, marginTop: 16, marginBottom: 8 }}>Sign in to view your profile</div>
@@ -171,7 +210,7 @@ export function ProfileScreen({ t, lang, setLang, go }: { t: Theme; lang: string
 
   if (error) {
     return (
-      <div style={{ padding: "0 16px 110px" }}>
+      <div style={{ padding: "0 12px 16px" }}>
         <Card t={t} style={{ textAlign: "center", padding: "40px 20px" }}>
           <Icon name="AlertTriangle" size={40} color={t.warning} />
           <div style={{ fontSize: 16, fontWeight: 700, color: t.text, marginTop: 16, marginBottom: 8 }}>Could not load profile</div>
@@ -183,13 +222,13 @@ export function ProfileScreen({ t, lang, setLang, go }: { t: Theme; lang: string
   }
 
   return (
-    <div style={{ padding: "0 16px 110px" }}>
+    <div style={{ padding: "0 12px 16px" }}>
       <Card t={t} style={{ overflow: "hidden", padding: 0 }}>
         <div style={{ height: 78, background: `linear-gradient(135deg,${t.accent},${t.secondary})` }} />
         <div style={{ padding: "0 16px 18px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 12, marginTop: -28 }}>
             <div style={{ width: 66, height: 66, borderRadius: "50%", background: `linear-gradient(135deg,${t.accent},${t.secondary})`, border: `3px solid ${t.card}`, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 20, fontWeight: 700, flexShrink: 0 }}>{displayAvatar}</div>
-            <Btn outline t={t} small>Edit Profile</Btn>
+            <Btn outline t={t} small onClick={openEdit}>Edit Profile</Btn>
           </div>
           <div style={{ fontSize: 20, fontWeight: 700, color: t.text }}>{displayName}</div>
           <div style={{ fontSize: 12, color: t.muted, marginBottom: 12, fontStyle: "italic" }}>{displayHandle}</div>
@@ -201,6 +240,25 @@ export function ProfileScreen({ t, lang, setLang, go }: { t: Theme; lang: string
           </div>
         </div>
       </Card>
+
+      {editing && (
+        <Card t={t}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 14 }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: t.text }}>Edit Profile</div>
+            <button onClick={() => setEditing(false)} style={{ width: 30, height: 30, borderRadius: 8, border: `1px solid ${t.border}`, background: t.tag, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Icon name="X" size={14} color={t.muted} />
+            </button>
+          </div>
+          <InputF label="Name" value={editName} onChange={e => setEditName(e.target.value)} t={t} />
+          <InputF label="Phone" value={editPhone} onChange={e => setEditPhone(e.target.value)} placeholder="+91..." t={t} />
+          <InputF label="Avatar URL" value={editAvatarUrl} onChange={e => setEditAvatarUrl(e.target.value)} placeholder="https://..." t={t} />
+          {saveError && <div style={{ background: t.danger + "12", border: `1px solid ${t.danger}25`, borderRadius: 8, padding: "9px 12px", color: t.danger, fontSize: 12.5, marginBottom: 12 }}>{saveError}</div>}
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <Btn t={t} disabled={saving} onClick={saveProfile}>{saving ? "Saving..." : "Save Profile"}</Btn>
+            <Btn t={t} outline disabled={saving} onClick={() => setEditing(false)}>Cancel</Btn>
+          </div>
+        </Card>
+      )}
 
       <div style={{ fontSize: 11, fontWeight: 700, color: t.muted, letterSpacing: 1.5, textTransform: "uppercase", margin: "4px 2px 12px" }}>Travel Management</div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>

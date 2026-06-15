@@ -196,7 +196,7 @@ export function RouteScreen({ t }: { t: Theme }) {
   };
 
   return (
-    <div style={{ padding: "0 16px 110px" }}>
+    <div style={{ padding: "0 16px 16px" }}>
       <div style={{ background: `linear-gradient(135deg,${t.accent}15,${t.secondary}10)`, borderRadius: 12, padding: "13px 16px", marginBottom: 18, border: `1px solid ${t.accent}20` }}>
         <div style={{ fontSize: 14, color: t.accent, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
           <Icon name="Route" size={16} color={t.accent} /> Route &amp; Map Planner

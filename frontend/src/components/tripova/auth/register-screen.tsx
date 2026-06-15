@@ -35,8 +35,8 @@ export function RegisterScreen({ t, onSwitch, onSuccess }: RegisterScreenProps) 
     try {
       await register({ name, email, password });
       onSuccess();
-    } catch (err: any) {
-      setLocalError(err?.message || "Registration failed");
+    } catch (err: unknown) {
+      setLocalError(err instanceof Error ? err.message : "Registration failed");
     } finally {
       setLoading(false);
     }
@@ -46,7 +46,7 @@ export function RegisterScreen({ t, onSwitch, onSuccess }: RegisterScreenProps) 
     <div style={{ padding: "40px 24px", maxWidth: 400, margin: "0 auto" }}>
       <div style={{ textAlign: "center", marginBottom: 36 }}>
         <div style={{ display: "flex", justifyContent: "center", marginBottom: 4 }}>
-          <LogoMark size={64} rounded={18} />
+          <LogoMark size={64} />
         </div>
         <h1 style={{ fontFamily: "var(--font-dm-serif), Georgia, serif", fontSize: 30, fontWeight: 400, color: t.heading, margin: "12px 0 4px" }}>Tripsova</h1>
         <p style={{ fontSize: 13, color: t.muted, margin: 0 }}>Join the traveller community</p>

@@ -11,15 +11,11 @@ interface AuthState {
   login: (data: LoginRequest) => Promise<void>;
   register: (data: RegisterRequest) => Promise<void>;
   logout: () => void;
+  refreshUser: () => Promise<void>;
   isAuth: boolean;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
-
-function useInitialLoading(): boolean {
-  const [loading] = useState(() => !!getToken());
-  return loading;
-}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUserResponse | null>(null);
@@ -86,8 +82,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo(() => ({
-    user, loading, error, login, register, logout, isAuth: !!user,
-  }), [user, loading, error, login, register, logout]);
+    user, loading, error, login, register, logout, refreshUser: fetchMe, isAuth: !!user,
+  }), [user, loading, error, login, register, logout, fetchMe]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

@@ -63,10 +63,9 @@ export function PureFindScreen({ t }: { t: Theme }) {
 
   useEffect(() => {
     let mounted = true;
-    const isFirstLoad = apiPlaces === null;
     startTransition(() => {
       setError(null);
-      if (isFirstLoad) setLoading(true);
+      setLoading(true);
     });
 
     const params = new URLSearchParams();
@@ -101,8 +100,8 @@ export function PureFindScreen({ t }: { t: Theme }) {
   });
 
   return (
-    <div style={{ padding: "0 16px 110px" }}>
-      <ScreenHeader t={t} eyebrow="Eat with confidence" title={<>Find food you can<br />actually eat.</>} subtitle="Diet-aware places, verified by fellow travellers — never ads.">
+    <div style={{ padding: "0 12px 16px" }}>
+      <ScreenHeader t={t} eyebrow="Eat with confidence" title={<>Find food you can<br />actually eat.</>} subtitle="Diet-aware places verified by fellow travellers.">
         <PoweredBy t={t} style={{ marginTop: 10 }} />
       </ScreenHeader>
 
@@ -111,17 +110,17 @@ export function PureFindScreen({ t }: { t: Theme }) {
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search restaurant or city..." style={{ width: "100%", padding: "12px 16px 12px 42px", borderRadius: 12, border: `1px solid ${t.border}`, background: t.card, color: t.text, fontSize: 14, outline: "none", boxSizing: "border-box" }} />
       </div>
 
-      <div style={{ background: t.card, borderRadius: 14, padding: "13px 16px", marginBottom: 18, border: `1px solid ${t.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 1px 3px rgba(13,19,32,0.04)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
+      <div style={{ background: t.card, borderRadius: 14, padding: "13px 14px", marginBottom: 18, border: `1px solid ${t.border}`, display: "flex", flexDirection: "column", gap: 12, alignItems: "stretch", boxShadow: "0 1px 3px rgba(13,19,32,0.04)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 11, minWidth: 0 }}>
           <div style={{ width: 40, height: 40, borderRadius: 11, background: t.accent + "14", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name="Camera" size={19} color={t.accent} /></div>
-          <div>
+          <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 15, color: t.heading }}>AI Menu Scanner</div>
             <div style={{ fontSize: 11.5, color: t.muted }}>Photograph any menu — AI highlights safe items</div>
           </div>
         </div>
         <button
           onClick={() => { setScanning(true); setTimeout(() => setScanning(false), 2500); }}
-          style={{ padding: "9px 16px", borderRadius: 8, border: "none", background: t.accent, color: "#fff", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}
+          style={{ width: "100%", padding: "10px 16px", borderRadius: 9, border: "none", background: t.accent, color: "#fff", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}
         >
           {scanning ? "Scanning…" : "Scan"}
         </button>
@@ -207,12 +206,12 @@ export function PureFindScreen({ t }: { t: Theme }) {
                 </div>
               </div>
               <div style={{ padding: 14 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-                  <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, marginBottom: 8 }}>
+                  <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 16, color: t.heading }}>{r.name}</div>
                     <div style={{ fontSize: 12, color: t.muted, display: "flex", alignItems: "center", gap: 4 }}><Icon name="MapPin" size={11} color={t.muted} /> {r.location} · {r.distance}</div>
                   </div>
-                  <div style={{ textAlign: "right" }}>
+                  <div style={{ textAlign: "right", flexShrink: 0 }}>
                     <div style={{ fontSize: 14, fontWeight: 700, color: t.warning, display: "flex", alignItems: "center", gap: 3, justifyContent: "flex-end" }}><Icon name="Star" size={12} color={t.warning} /> {r.rating}</div>
                     <div style={{ fontSize: 11, color: t.muted }}>{r.reviews} reviews</div>
                   </div>
@@ -222,15 +221,14 @@ export function PureFindScreen({ t }: { t: Theme }) {
                 </div>
                 {expanded === r.id ? (
                   <div style={{ background: t.gold + "10", border: `1px solid ${t.gold}35`, borderRadius: 12, padding: 13 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8 }}><Icon name="Sparkles" size={15} color={t.gold} /><span style={{ fontSize: 13, fontWeight: 700, color: t.gold }}>Premium enhancements for this menu</span></div>
-                    {["Ingredient analysis — flags hidden onion, garlic & dairy", "Allergy warnings tailored to your profile", "One-tap menu translation to English"].map(x => (
+                    <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8 }}><Icon name="ShieldCheck" size={15} color={t.gold} /><span style={{ fontSize: 13, fontWeight: 700, color: t.gold }}>Food trust details</span></div>
+                    {["Diet tags are community-verified", "Recent checks improve this place's confidence", "Save the place before your trip for offline planning"].map(x => (
                       <div key={x} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: t.text, marginBottom: 6 }}><Icon name="Check" size={13} color={t.gold} /> {x}</div>
                     ))}
-                    <button style={{ marginTop: 6, width: "100%", padding: "10px", borderRadius: 9, border: "none", background: `linear-gradient(135deg,${t.gold},${t.goldFill})`, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Try Premium free for 7 days</button>
                   </div>
                 ) : (
                   <button onClick={() => setExpanded(r.id)} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "10px 13px", borderRadius: 10, border: `1px dashed ${t.gold}55`, background: t.gold + "0A", color: t.text, fontSize: 12.5, cursor: "pointer", textAlign: "left" }}>
-                    <Icon name="Sparkles" size={15} color={t.gold} /> <span>Want ingredient analysis & menu translation?</span> <span style={{ marginLeft: "auto" }}><Icon name="ChevronRight" size={15} color={t.muted} /></span>
+                    <Icon name="ShieldCheck" size={15} color={t.gold} /> <span>See why this food spot is trusted</span> <span style={{ marginLeft: "auto" }}><Icon name="ChevronRight" size={15} color={t.muted} /></span>
                   </button>
                 )}
               </div>

@@ -10,6 +10,7 @@ Tripova is an India-first travel discovery platform built with a modular FastAPI
 Tripsova/
 ├── backend/                  # FastAPI Python backend
 ├── frontend/                 # Next.js frontend (fetches the live API)
+│   └── public/brand/          # Stable generated brand assets used by app chrome
 ├── deploy/                   # Docker Compose, nginx, system packages, Pi deploy guide
 ├── docs/                     # Project docs (this file, USER_WORKFLOW, plans)
 └── tripova.jsx               # Legacy prototype, not referenced by any build
@@ -175,13 +176,15 @@ tests/
 ├── test_auth.py
 ├── test_auth_refresh.py
 ├── test_destinations.py
+├── test_feed.py
 ├── test_offline.py
 ├── test_places.py
 ├── test_ranking.py
 ├── test_rate_limit.py
 ├── test_request_logging.py
 ├── test_sentiment.py
-└── test_trip_planner.py
+├── test_trip_planner.py
+└── test_users.py
 ```
 
 Uses `pytest` + `pytest-asyncio` (auto mode configured in `pyproject.toml`).
@@ -221,23 +224,25 @@ The frontend is a Next.js app that fetches the **live backend API** — there is
 hardcoded demo data driving the UI. See `frontend/AGENTS.md` for the coding conventions.
 
 ```
-frontend/src/
-├── app/                      # Next.js routes (app shell, SSR content pages, robots/sitemap/manifest/icons)
-├── lib/
-│   ├── api.ts                # Client-side API helper (api.get/api.post)
-│   ├── server-api.ts         # Server-side fetch helper for SSR pages
-│   ├── destinations.ts       # useDestinations(limit?) hook → { destinations, loading, error, reload }
-│   ├── types.ts              # API response types (FeedPostResponse, FoodPlaceResponse, TripPodResponse, …)
-│   └── utils.ts              # Shared helpers
-├── data/                     # Theme tokens + small static config ONLY (no demo content)
-│   ├── theme.ts              # LIGHT / DARK token objects (the `t` prop source)
-│   └── index.ts              # Re-exports (Theme type, etc.)
-└── components/tripova/
-    ├── logo.tsx              # Brand mark: navy disc, gold serif "T", airplane swoosh, TRIPSOVA wordmark
-    ├── icon.tsx              # lucide-react icon-by-name wrapper
-    ├── app-shell.tsx         # Responsive shell (sidebar ≥1024px, bottom-nav on mobile), tab routing
-    ├── primitives/index.tsx  # Shared UI: ScreenHeader, SectionTitle, Card, Btn, InputF, SkeletonCard…
-    └── screens/              # One file per surface (home, discover, pods, purefind, plan, profile, …)
+frontend/
+├── public/brand/              # Generated Tripsova logo mark used by UI and app icons
+└── src/
+    ├── app/                  # Next.js routes (app shell, SSR content pages, robots/sitemap/manifest/icons)
+    ├── lib/
+    │   ├── api.ts            # Client-side API helper (api.get/api.post)
+    │   ├── server-api.ts     # Server-side fetch helper for SSR pages
+    │   ├── destinations.ts   # useDestinations(limit?) hook → { destinations, loading, error, reload }
+    │   ├── types.ts          # API response types (FeedPostResponse, FoodPlaceResponse, TripPodResponse, …)
+    │   └── utils.ts          # Shared helpers
+    ├── data/                 # Theme tokens + small static config ONLY (no demo content)
+    │   ├── theme.ts          # LIGHT / DARK token objects (the `t` prop source)
+    │   └── index.ts          # Re-exports (Theme type, etc.)
+    └── components/tripova/
+        ├── logo.tsx          # Brand mark using public/brand/tripsova-mark.png plus native wordmark text
+        ├── icon.tsx          # lucide-react icon-by-name wrapper
+        ├── app-shell.tsx     # Responsive shell (sidebar ≥1024px, bottom-nav on mobile), tab routing
+        ├── primitives/index.tsx # Shared UI: ScreenHeader, SectionTitle, Card, Btn, InputF, SkeletonCard…
+        └── screens/          # One file per surface (home, trip pulse, pods, purefind, plan, profile, settings, support, …)
 ```
 
 ### Styling model

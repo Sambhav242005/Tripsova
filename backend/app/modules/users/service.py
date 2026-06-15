@@ -47,7 +47,7 @@ async def update_user(db: AsyncSession, user_id: str, data: dict) -> dict:
     if not user:
         raise NotFoundError("User not found")
 
-    allowed_fields = {"name", "display_name", "avatar_url", "bio"}
+    allowed_fields = {"name", "phone", "avatar_url", "travel_style", "diet_preference"}
     for key, value in data.items():
         if key in allowed_fields and hasattr(user, key):
             setattr(user, key, value)

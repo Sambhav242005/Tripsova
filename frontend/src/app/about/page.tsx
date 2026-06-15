@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 };
 
 const PRINCIPLES: [string, string][] = [
-  ["People over ads", "Rankings come from traveller trust and verification — never paid placement."],
+  ["People over paid placement", "Rankings come from traveller trust and verification."],
   ["Trust is earned", "Every contribution is weighted by a TrustScore built from real traveller credibility."],
   ["Inclusive by design", "Diet-aware discovery for Jain, pure-veg, vegan, halal, gluten-free, sattvic and more."],
   ["Works anywhere", "Offline-first packs mean your trip keeps working even with no signal."],
@@ -55,7 +55,7 @@ export default function AboutPage() {
         </h1>
         <p style={{ fontSize: 17.5, lineHeight: 1.75, color: C.text, margin: 0 }}>
           Tripsova is a travel platform built on a simple belief: the best travel advice
-          comes from real travellers, not advertisers. We&apos;re an India-first, globally
+          comes from real travellers, not paid placement. We&apos;re an India-first, globally
           scalable community where verified people — not paid placements — are the source
           of truth for where to go, what to eat and how to stay safe.
         </p>
@@ -117,9 +117,9 @@ export default function AboutPage() {
             teams who want to build a more trustworthy way to travel.
           </p>
           <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 8, fontSize: 15.5 }}>
-            <li>General: <a href="mailto:hello@tripsova.com" style={{ color: C.goldFill, textDecoration: "none", fontWeight: 700 }}>hello@tripsova.com</a></li>
-            <li>Support: <a href="mailto:support@tripsova.com" style={{ color: C.goldFill, textDecoration: "none", fontWeight: 700 }}>support@tripsova.com</a></li>
-            <li>Partnerships: <a href="mailto:partners@tripsova.com" style={{ color: C.goldFill, textDecoration: "none", fontWeight: 700 }}>partners@tripsova.com</a></li>
+            <li>General: <a href="mailto:tripsova.app@gmail.com" style={{ color: C.goldFill, textDecoration: "none", fontWeight: 700 }}>tripsova.app@gmail.com</a></li>
+            <li>Support: <a href="mailto:tripsova.app@gmail.com" style={{ color: C.goldFill, textDecoration: "none", fontWeight: 700 }}>tripsova.app@gmail.com</a></li>
+            <li>Partnerships: <a href="mailto:tripsova.app@gmail.com" style={{ color: C.goldFill, textDecoration: "none", fontWeight: 700 }}>tripsova.app@gmail.com</a></li>
           </ul>
           <div style={{ marginTop: 22 }}>
             <Link

@@ -5,7 +5,7 @@ import type { Theme } from "@/data";
 import { getFI, VERIFY_LEVELS, USER_PREMIUM, getVerify, ALL_FOOD_TYPES } from "@/data/index";
 import { Icon } from "../icon";
 
-export function FoodBadge({ id, small, t }: { id: string; small?: boolean; t: Theme }) {
+export function FoodBadge({ id, small }: { id: string; small?: boolean; t: Theme }) {
   const f = getFI(id);
   return (
     <span
@@ -55,7 +55,7 @@ export function Hallmark({ label, t, light }: { label: string; t: Theme; light?:
   );
 }
 
-export function CommunityVerified({ foodId, count, t }: { foodId: string; count: number; t: Theme }) {
+export function CommunityVerified({ foodId, count }: { foodId: string; count: number; t: Theme }) {
   const f = getFI(foodId);
   return (
     <span

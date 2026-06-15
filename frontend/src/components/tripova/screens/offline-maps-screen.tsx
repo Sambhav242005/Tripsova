@@ -64,7 +64,7 @@ export function OfflineMapsScreen({ t }: { t: Theme }) {
   };
 
   return (
-    <div style={{ padding: "0 16px 110px" }}>
+    <div style={{ padding: "0 16px 16px" }}>
       <div style={{ background: `linear-gradient(135deg,${t.teal}12,${t.accent}08)`, borderRadius: 12, padding: "13px 16px", marginBottom: 20, border: `1px solid ${t.teal}20` }}>
         <div style={{ fontSize: 14, color: t.teal, fontWeight: 700 }}>🗺 Offline Maps</div>
         <div style={{ fontSize: 12, color: t.muted, fontStyle: "italic", marginTop: 2 }}>Navigate without internet. Essential for remote India.</div>

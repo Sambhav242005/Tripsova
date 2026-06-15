@@ -77,7 +77,7 @@ const SECTIONS: { h: string; p: string[] }[] = [
   {
     h: "9. Contact us",
     p: [
-      "Questions about privacy? Email privacy@tripsova.com and we’ll respond as soon as we can.",
+      "Questions about privacy? Email tripsova.app@gmail.com and we’ll respond as soon as we can.",
     ],
   },
 ];

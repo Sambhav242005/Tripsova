@@ -1,66 +1,48 @@
-import React from "react";
-
-// Tripsova brand mark: a deep-navy disc with a gold serif "T", an airplane
-// taking off, and a dashed flight-path orbit. Recreated as inline SVG (not the
-// raster logo) so it scales crisply and themes cleanly across light/dark.
-export function LogoMark({ size = 32 }: { size?: number; rounded?: number }) {
-  const id = React.useId();
+// Tripsova brand mark — inline SVG, crisp at every size, no external image needed.
+export function LogoMark({ size = 32 }: { size?: number }) {
+  const s = size;
   return (
     <svg
-      width={size}
-      height={size}
-      viewBox="0 0 48 48"
+      width={s}
+      height={s}
+      viewBox="0 0 32 32"
       fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      role="img"
-      aria-label="Tripsova logo"
+      style={{ flexShrink: 0, display: "block", borderRadius: "50%" }}
     >
-      <defs>
-        <radialGradient id={`${id}-bg`} cx="0.32" cy="0.26" r="0.95">
-          <stop stopColor="#21365C" />
-          <stop offset="1" stopColor="#0C1730" />
-        </radialGradient>
-        <linearGradient id={`${id}-gold`} x1="12" y1="8" x2="38" y2="40" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#EBD292" />
-          <stop offset="0.55" stopColor="#D4B06A" />
-          <stop offset="1" stopColor="#B98E3F" />
-        </linearGradient>
-      </defs>
-
-      {/* navy disc with a faint gold rim */}
-      <circle cx="24" cy="24" r="23" fill={`url(#${id}-bg)`} />
-      <circle cx="24" cy="24" r="23" fill="none" stroke={`url(#${id}-gold)`} strokeOpacity="0.35" strokeWidth="1" />
-
-      {/* dashed flight-path orbit sweeping up to the plane */}
-      <path
-        d="M12.5 30.5 C 18.5 36.5, 30.5 33.5, 35 19.5"
-        stroke={`url(#${id}-gold)`}
-        strokeWidth="1.3"
-        strokeLinecap="round"
-        strokeDasharray="0.4 3.1"
-        fill="none"
-      />
-
-      {/* serif T */}
+      {/* Navy disc */}
+      <circle cx="16" cy="16" r="16" fill="#1B263B" />
+      {/* Subtle inner glow */}
+      <circle cx="16" cy="16" r="14" fill="url(#g)" opacity="0.35" />
+      {/* Gold serif T */}
       <text
-        x="22.5"
-        y="33"
+        x="16"
+        y="22.5"
         textAnchor="middle"
-        fontFamily="var(--font-dm-serif), Georgia, 'Times New Roman', serif"
-        fontSize="27"
-        fontWeight={500}
-        fill={`url(#${id}-gold)`}
+        fontFamily="Georgia, 'Times New Roman', serif"
+        fontSize="18"
+        fontWeight="700"
+        fill="#D4B483"
+        letterSpacing="0.5"
       >
         T
       </text>
-
-      {/* airplane lifting off (lucide plane silhouette) */}
-      <g transform="translate(25.5 2.4) scale(0.58)">
-        <path
-          d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"
-          fill={`url(#${id}-gold)`}
-        />
-      </g>
+      {/* Subtle arc — travel / orbit accent */}
+      <path
+        d="M6 20.5 Q10 26 16 26 Q22 26 26 20.5"
+        stroke="#D4B483"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+        fill="none"
+        opacity="0.5"
+      />
+      {/* Small dot on arc (airplane/waypoint) */}
+      <circle cx="22" cy="23.2" r="1.5" fill="#D4B483" opacity="0.6" />
+      <defs>
+        <radialGradient id="g" cx="0.4" cy="0.35" r="0.7">
+          <stop offset="0" stopColor="#D4B483" stopOpacity="0.3" />
+          <stop offset="1" stopColor="#D4B483" stopOpacity="0" />
+        </radialGradient>
+      </defs>
     </svg>
   );
 }

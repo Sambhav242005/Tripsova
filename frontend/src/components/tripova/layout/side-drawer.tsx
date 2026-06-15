@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 import type { Theme } from "@/data";
 import { Icon } from "../icon";
 import { useApp } from "../app-provider";
@@ -17,13 +17,13 @@ function getInitials(name?: string): string {
 }
 
 export function SideDrawer() {
-  const { t, dark, setDark, tab, setTab, sub, setSub, drawerOpen, setDrawerOpen, dest, setDest } = useApp();
+  const { t, dark, setDark, tab, setTab, sub, setSub, drawerOpen, setDrawerOpen, dest, setDest, T } = useApp();
   const { user } = useAuth();
   const { destinations } = useDestinations(10);
 
   const primary = [
     { id: "home", icon: "House", label: "Home" },
-    { id: "discover", icon: "Compass", label: "Discover" },
+    { id: "discover", icon: "Activity", label: "Trip Pulse" },
     { id: "purefind", icon: "Salad", label: "PureFind" },
     { id: "pods", icon: "Users", label: "TripPods" },
     { id: "profile", icon: "User", label: "Profile" },
@@ -32,14 +32,21 @@ export function SideDrawer() {
     { id: "journey", icon: "Navigation", label: "Plan My Journey" },
     { id: "plan", icon: "Sparkles", label: "AI Trip Builder" },
     { id: "route", icon: "Route", label: "Route Planner" },
-    { id: "guides", icon: "Map", label: "Local Guides" },
-    { id: "family", icon: "Users", label: "Family Circle" },
     { id: "budget", icon: "Wallet", label: "Budget Tracker" },
     { id: "maps", icon: "MapPinned", label: "Offline Maps" },
   ];
   const saved = (destinations ?? []).slice(0, 3);
 
   const active = dest ? "dest" : (sub || tab);
+  useEffect(() => {
+    setDrawerOpen(false);
+  }, [active, setDrawerOpen]);
+  const scrollToTop = () => {
+    requestAnimationFrame(() => {
+      document.getElementById("tripova-scroll")?.scrollTo({ top: 0, behavior: "smooth" });
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  };
 
   const Row = ({ icon, label, on, sel }: { icon: string; label: string; on: () => void; sel: boolean }) => (
     <button
@@ -53,12 +60,12 @@ export function SideDrawer() {
         textAlign: "left", transition: "background 0.15s",
       }}
     >
-      <Icon name={icon} size={19} color={sel ? t.accent : t.muted} stroke={sel ? 2.3 : 2} /> {label}
+      <Icon name={icon} size={19} color={sel ? t.accent : t.muted} stroke={sel ? 2.3 : 2} /> {T(label)}
     </button>
   );
 
   return (
-    <div style={{ position: "fixed", top: 0, bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 430, zIndex: 200, pointerEvents: drawerOpen ? "auto" : "none" }}>
+    <div style={{ position: "fixed", top: 0, bottom: 0, left: 0, width: "100%", zIndex: 200, pointerEvents: drawerOpen ? "auto" : "none" }}>
       <div onClick={() => setDrawerOpen(false)} style={{ position: "absolute", inset: 0, background: "rgba(13,19,32,0.5)", backdropFilter: drawerOpen ? "blur(2px)" : "none", opacity: drawerOpen ? 1 : 0, transition: "opacity 0.28s" }} />
       <div style={{
         position: "absolute", top: 0, left: 0, bottom: 0, width: 300, maxWidth: "82%",
@@ -91,17 +98,17 @@ export function SideDrawer() {
 
         <div style={{ padding: "10px 8px 6px", flex: 1 }}>
           {primary.map(p => (
-            <Row key={p.id} icon={p.icon} label={p.label} sel={active === p.id} on={() => { setTab(p.id); setDrawerOpen(false); }} />
+            <Row key={p.id} icon={p.icon} label={p.label} sel={active === p.id} on={() => { setTab(p.id); setDrawerOpen(false); scrollToTop(); }} />
           ))}
           <div style={{ height: 1, background: t.border, margin: "8px 12px" }} />
           <Eyebrow t={t}>Travel Management</Eyebrow>
           {manage.map(m => (
-            <Row key={m.id} icon={m.icon} label={m.label} sel={active === m.id} on={() => { setSub(m.id); setDrawerOpen(false); }} />
+            <Row key={m.id} icon={m.icon} label={m.label} sel={active === m.id} on={() => { setSub(m.id); setDrawerOpen(false); scrollToTop(); }} />
           ))}
           {saved.length > 0 && <div style={{ height: 1, background: t.border, margin: "8px 12px" }} />}
           {saved.length > 0 && <Eyebrow t={t}>Saved Destinations</Eyebrow>}
           {saved.map((d, i) => (
-            <button key={d.id + "-" + i} onClick={() => { setDest(d.id); setDrawerOpen(false); }} style={{ display: "flex", alignItems: "center", gap: 11, width: "100%", padding: "9px 12px", borderRadius: 11, border: "none", background: "transparent", cursor: "pointer", textAlign: "left" }}>
+            <button key={d.id + "-" + i} onClick={() => { setDest(d.id); setDrawerOpen(false); scrollToTop(); }} style={{ display: "flex", alignItems: "center", gap: 11, width: "100%", padding: "9px 12px", borderRadius: 11, border: "none", background: "transparent", cursor: "pointer", textAlign: "left" }}>
               <div style={{ width: 34, height: 34, borderRadius: 9, background: d.gradient, flexShrink: 0 }} />
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 14, color: t.text, fontWeight: 600 }}>{d.name}</div>
@@ -116,11 +123,11 @@ export function SideDrawer() {
           <button onClick={() => setDark(v => !v)} style={{ display: "flex", alignItems: "center", gap: 11, width: "100%", padding: "11px 12px", borderRadius: 11, border: "none", background: "transparent", color: t.text, cursor: "pointer", fontSize: 14, fontWeight: 500 }}>
             <Icon name={dark ? "Sun" : "Moon"} size={18} color={t.muted} /> {dark ? "Light mode" : "Dark mode"}
           </button>
-          <button style={{ display: "flex", alignItems: "center", gap: 11, width: "100%", padding: "11px 12px", borderRadius: 11, border: "none", background: "transparent", color: t.text, cursor: "pointer", fontSize: 14, fontWeight: 500 }}>
-            <Icon name="Settings" size={18} color={t.muted} /> Settings & Privacy
+          <button onClick={() => { setSub("settings"); setDrawerOpen(false); scrollToTop(); }} style={{ display: "flex", alignItems: "center", gap: 11, width: "100%", padding: "11px 12px", borderRadius: 11, border: "none", background: sub === "settings" ? t.accent + "14" : "transparent", color: sub === "settings" ? t.accent : t.text, cursor: "pointer", fontSize: 14, fontWeight: sub === "settings" ? 700 : 500 }}>
+            <Icon name="Settings" size={18} color={sub === "settings" ? t.accent : t.muted} /> {T("Settings & Privacy")}
           </button>
-          <button style={{ display: "flex", alignItems: "center", gap: 11, width: "100%", padding: "11px 12px", borderRadius: 11, border: "none", background: "transparent", color: t.text, cursor: "pointer", fontSize: 14, fontWeight: 500 }}>
-            <Icon name="LifeBuoy" size={18} color={t.muted} /> Help & Support
+          <button onClick={() => { setSub("support"); setDrawerOpen(false); scrollToTop(); }} style={{ display: "flex", alignItems: "center", gap: 11, width: "100%", padding: "11px 12px", borderRadius: 11, border: "none", background: sub === "support" ? t.accent + "14" : "transparent", color: sub === "support" ? t.accent : t.text, cursor: "pointer", fontSize: 14, fontWeight: sub === "support" ? 700 : 500 }}>
+            <Icon name="LifeBuoy" size={18} color={sub === "support" ? t.accent : t.muted} /> {T("Help & Support")}
           </button>
         </div>
       </div>

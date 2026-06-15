@@ -129,8 +129,8 @@ export function PlanScreen({ t }: { t: Theme }) {
   }
 
   return (
-    <div style={{ padding: "0 16px 110px" }}>
-      <button onClick={() => { setSub("route"); window.scrollTo(0, 0); }}
+    <div style={{ padding: "0 12px 16px" }}>
+      <button onClick={() => { setSub("route"); document.getElementById("tripova-scroll")?.scrollTo({ top: 0, behavior: "smooth" }); window.scrollTo({ top: 0, behavior: "smooth" }); }}
         style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "13px 16px", marginBottom: 14, borderRadius: 14, border: `1px solid ${t.accent}25`, background: `linear-gradient(135deg,${t.accent}12,${t.secondary}0A)`, cursor: "pointer", textAlign: "left" }}>
         <span style={{ width: 38, height: 38, borderRadius: 10, background: t.accent + "15", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
           <Icon name="Route" size={19} color={t.accent} />
@@ -150,7 +150,7 @@ export function PlanScreen({ t }: { t: Theme }) {
         </div>
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 9, fontWeight: 700, color: t.muted, letterSpacing: 2.5, textTransform: "uppercase", marginBottom: 8 }}>Group Type</div>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
             {groupTypes.map(g => (
               <button key={g.id} onClick={() => setForm(f => ({ ...f, groupType: g.id }))} style={{ flex: 1, padding: "9px 6px", borderRadius: 8, border: `1.5px solid ${form.groupType === g.id ? t.accent : t.border}`, background: form.groupType === g.id ? t.accent + "12" : t.tag, color: form.groupType === g.id ? t.accent : t.muted, fontSize: 11, fontWeight: 700, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, transition: "all 0.18s" }}>
                 <span style={{ fontSize: 18 }}>{g.icon}</span>{g.id}
@@ -160,9 +160,9 @@ export function PlanScreen({ t }: { t: Theme }) {
         </div>
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 9, fontWeight: 700, color: t.muted, letterSpacing: 2.5, textTransform: "uppercase", marginBottom: 8 }}>How are you getting there?</div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 6 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
             {travelModes.map(m => (
-              <button key={m.id} onClick={() => setForm(f => ({ ...f, travelMode: m.id }))} style={{ padding: "9px 4px", borderRadius: 8, border: `1.5px solid ${form.travelMode === m.id ? t.accent : t.border}`, background: form.travelMode === m.id ? t.accent + "12" : t.tag, color: form.travelMode === m.id ? t.accent : t.muted, fontSize: 10, fontWeight: 700, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, transition: "all 0.18s" }}>
+              <button key={m.id} onClick={() => setForm(f => ({ ...f, travelMode: m.id }))} style={{ minHeight: 62, padding: "9px 4px", borderRadius: 8, border: `1.5px solid ${form.travelMode === m.id ? t.accent : t.border}`, background: form.travelMode === m.id ? t.accent + "12" : t.tag, color: form.travelMode === m.id ? t.accent : t.muted, fontSize: 10.5, fontWeight: 700, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, transition: "all 0.18s" }}>
                 <span style={{ fontSize: 17 }}>{m.icon}</span>{m.label}
               </button>
             ))}

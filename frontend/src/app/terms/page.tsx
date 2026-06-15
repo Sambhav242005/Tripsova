@@ -87,7 +87,7 @@ const SECTIONS: { h: string; p: string[] }[] = [
   {
     h: "12. Changes and contact",
     p: [
-      "We may update these terms; continued use after changes means you accept them. Questions? Email legal@tripsova.com.",
+      "We may update these terms; continued use after changes means you accept them. Questions? Email tripsova.app@gmail.com.",
     ],
   },
 ];

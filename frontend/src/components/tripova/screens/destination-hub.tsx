@@ -201,7 +201,7 @@ export function DestinationHub({ t, destId, openPureFind }: { t: Theme; destId: 
   ) : null;
 
   return (
-    <div style={{ padding: "0 0 110px" }}>
+    <div style={{ padding: "0 0 16px" }}>
       {loadingBar}
       {errorBar}
       <div style={{ height: 280, background: d.gradient, position: "relative" }}>

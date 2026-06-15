@@ -2,8 +2,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { SiteHeader, SiteFooter, C } from "@/components/marketing/site-chrome";
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://tripsova.com";
-
 export const metadata: Metadata = {
   title: "Tripsova — Discover through people",
   description:
@@ -61,8 +59,7 @@ function Hero() {
           }}
         >
           Plan safer, smarter trips on real traveller ground truth — AI itineraries,
-          diet-aware food, verified companions and offline packs. No ads, no fake
-          reviews, just travellers helping travellers.
+          diet-aware food, verified companions, TrustScore, and offline packs.
         </p>
         <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
           <Link
@@ -77,7 +74,7 @@ function Hero() {
               textDecoration: "none",
             }}
           >
-            Start planning — it&apos;s free
+            Start planning
           </Link>
           <Link
             href="/destinations"
@@ -102,7 +99,7 @@ function Hero() {
 
 function Stats() {
   const stats: [string, string][] = [
-    ["100%", "Traveller-verified, never ads"],
+    ["100%", "Traveller-verified signals"],
     ["8 signals", "Behind every TrustScore"],
     ["Offline-first", "Works with no signal"],
     ["Diet-aware", "Jain · Vegan · Halal · more"],
@@ -137,55 +134,59 @@ function Stats() {
 }
 
 function HowItWorks() {
-  const steps: [string, string, string][] = [
-    ["1", "Start with Where", "Tell Tripsova your destination — Manali, Goa, Spiti, Udaipur or anywhere you dream of."],
-    ["2", "Add your trip", "Days, budget, who's coming, your interests and any diet needs (Jain, vegan, halal…)."],
-    ["3", "Get your plan", "A costed, day-by-day itinerary with verified places, diet-aware food, safety notes and an offline pack."],
+  const offers: { icon: string; title: string; desc: string }[] = [
+    { icon: "✦", title: "PureFind", desc: "Diet-aware food discovery for Jain, Pure Veg, Vegan, Halal, Gluten Free & more — ranked by trust and verification, never by who paid." },
+    { icon: "✦", title: "TripPods", desc: "Find and join verified travel companions heading the same way. Browse by destination, budget, dates and food preferences." },
+    { icon: "✦", title: "TrustScore", desc: "Explainable credibility behind every place, person, post and food spot — built from 8 signals like reviews, response rate and community standing." },
+    { icon: "✦", title: "AI Trip Builder", desc: "Generate a complete day-by-day itinerary with costs, diet-aware food spots, interests, and fuel stops — in seconds." },
+    { icon: "✦", title: "CityFeed", desc: "Live, time-sensitive updates from travellers actually on the ground — safety, crowds, weather, prices and hidden gems." },
+    { icon: "✦", title: "Trip Pulse", desc: "Trending destinations ranked by real traveller activity — not star ratings alone, but review confidence, freshness and verification." },
+    { icon: "✦", title: "Offline Packs", desc: "Download your entire trip — itinerary, places, food spots, emergency contacts and map metadata — and use it with zero signal." },
+    { icon: "✦", title: "Route & Budget Tools", desc: "Plan multi-leg journeys with fuel stops, split group expenses automatically, and track spending against your budget." },
   ];
   return (
     <section id="how-it-works" style={{ maxWidth: 1000, margin: "0 auto", padding: "56px 20px" }}>
       <h2 style={{ fontFamily: serif, fontSize: "clamp(26px, 4vw, 36px)", color: C.navy, textAlign: "center", margin: "0 0 8px" }}>
-        How it works
+        What Tripsova offers
       </h2>
       <p style={{ textAlign: "center", color: C.muted, fontSize: 16, margin: "0 auto 36px", maxWidth: 540 }}>
-        From a single place name to a complete, trustworthy trip — in seconds.
+        Every feature is built around one idea — travel decisions powered by real travellers, not paid placement.
       </p>
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-          gap: 18,
+          gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+          gap: 16,
         }}
       >
-        {steps.map(([n, title, desc]) => (
+        {offers.map(({ icon, title, desc }) => (
           <div
-            key={n}
+            key={title}
             style={{
               background: C.card,
               border: `1px solid ${C.border}`,
               borderRadius: 16,
-              padding: "24px 22px",
+              padding: "22px 20px",
             }}
           >
             <div
               style={{
-                width: 40,
-                height: 40,
-                borderRadius: 12,
+                width: 38,
+                height: 38,
+                borderRadius: 10,
                 background: `linear-gradient(135deg, ${C.navy}, ${C.teal})`,
                 color: "#fff",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                fontFamily: serif,
-                fontSize: 20,
-                marginBottom: 14,
+                fontSize: 17,
+                marginBottom: 12,
               }}
             >
-              {n}
+              {icon}
             </div>
-            <h3 style={{ fontSize: 18, fontWeight: 700, color: C.navy, margin: "0 0 6px" }}>{title}</h3>
-            <p style={{ fontSize: 14.5, lineHeight: 1.6, color: C.muted, margin: 0 }}>{desc}</p>
+            <h3 style={{ fontSize: 17, fontWeight: 800, color: C.navy, margin: "0 0 6px" }}>{title}</h3>
+            <p style={{ fontSize: 14, lineHeight: 1.6, color: C.muted, margin: 0 }}>{desc}</p>
           </div>
         ))}
       </div>
@@ -242,9 +243,9 @@ function About() {
         Why Tripsova exists
       </h2>
       <p style={{ fontSize: 16.5, lineHeight: 1.75, color: C.text, margin: "0 0 14px" }}>
-        Travel decisions are still made on ads, paid placements and reviews you can&apos;t
+        Travel decisions are still made from stale lists, paid placements and reviews you can&apos;t
         verify. Tripsova flips that: it&apos;s an India-first, globally scalable travel
-        community where the people who&apos;ve actually been there are the source of truth.
+        community where people who&apos;ve actually been there are the source of truth.
       </p>
       <p style={{ fontSize: 16.5, lineHeight: 1.75, color: C.text, margin: 0 }}>
         Every place, every food spot and every safety note carries a TrustScore built

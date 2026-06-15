@@ -18,8 +18,8 @@ export function DiscoverScreen({ t, openDest }: { t: Theme; openDest: (id: strin
   );
 
   return (
-    <div style={{ padding: "16px 16px 110px" }}>
-      <ScreenHeader t={t} eyebrow="Explore" title="Discover" subtitle="Destinations ranked by real traveller activity." />
+    <div style={{ padding: "12px 12px 16px" }}>
+      <ScreenHeader t={t} eyebrow="Live destination signal" title="Trip Pulse" subtitle="Destinations ranked by real traveller activity." />
       <div style={{ position: "relative", marginBottom: 20 }}>
         <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", display: "flex" }}>
           <Icon name="Search" size={17} color={t.muted} />

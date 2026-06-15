@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef } from "react";
+import Image from "next/image";
 import type { Theme } from "@/data";
 import { CAT_COLORS } from "@/data";
 import { Icon } from "../icon";
@@ -164,7 +165,7 @@ export function CreateSheet({ open, onClose, t, onCreatePost, onCreatePod }: Cre
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
                 {photos.map((p, i) => (
                   <div key={i} style={{ position: "relative" }}>
-                    <img src={p} alt="" style={{ width: 72, height: 72, borderRadius: 10, objectFit: "cover" }} />
+                    <Image src={p} alt="" width={72} height={72} unoptimized style={{ width: 72, height: 72, borderRadius: 10, objectFit: "cover" }} />
                     <button
                       onClick={() => setPhotos(ph => ph.filter((_, x) => x !== i))}
                       style={{
