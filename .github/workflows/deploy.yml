@@ -38,6 +38,10 @@ jobs:
 
       - name: Run backend tests
         working-directory: backend
+        env:
+          # Settings requires JWT_SECRET; tests don't use a real one. This only
+          # satisfies config validation at import/collection time.
+          JWT_SECRET: ci-test-secret-not-used-for-deploy
         run: python -m pytest
 
       - name: Set up Node.js
