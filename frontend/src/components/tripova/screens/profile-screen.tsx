@@ -3,7 +3,6 @@
 import React, { useState, useEffect, startTransition } from "react";
 import type { Theme } from "@/data";
 import { LANGUAGES } from "@/data/feed";
-import { CURRENT_USER } from "@/data/user";
 import { Card, Btn } from "../primitives/index";
 import { Icon } from "../icon";
 import { TrustBadge, MultiSelectFood } from "../badges/index";
@@ -111,25 +110,19 @@ export function ProfileScreen({ t, lang, setLang, go }: { t: Theme; lang: string
       .catch(() => {});
   }, [user]);
 
-  const fallback = CURRENT_USER;
-  const displayName = user?.name || fallback.name;
-  const displayHandle = user?.name ? deriveHandle(user.name) : fallback.handle;
-  const displayAvatar = user?.name ? getInitials(user.name) : fallback.avatar;
-  const displayTrust = user?.trust_score ?? fallback.trust;
+  const displayName = user?.name || "Traveller";
+  const displayHandle = user?.name ? deriveHandle(user.name) : "";
+  const displayAvatar = user?.name ? getInitials(user.name) : "TR";
+  const displayTrust = user?.trust_score ?? 0;
   const stats = [
-    { label: "Trips", value: fallback.trips.toString() },
-    { label: "Countries", value: fallback.countries.toString() },
-    { label: "Pods", value: fallback.pods.toString() },
-    { label: "Reviews", value: "34" },
+    { label: "Trips", value: "—" },
+    { label: "Countries", value: "—" },
+    { label: "Pods", value: "—" },
+    { label: "Reviews", value: "—" },
   ];
   const trustBars: TrustBar[] = trustScore?.components
     ? parseTrustComponents(trustScore.components as Record<string, unknown>, t)
-    : [
-        { label: "Identity Verified", score: 30, max: 30, color: t.success },
-        { label: "Reviews from Trips", score: 27, max: 30, color: t.accent },
-        { label: "Response Rate", score: 18, max: 20, color: t.secondary },
-        { label: "Community Standing", score: 13, max: 20, color: t.warning },
-      ];
+    : [];
   const manage = [
     { id: "journey", icon: "Navigation", label: "Plan My Journey" },
     { id: "plan", icon: "Sparkles", label: "AI Trip Builder" },
@@ -202,9 +195,6 @@ export function ProfileScreen({ t, lang, setLang, go }: { t: Theme; lang: string
           <div style={{ fontSize: 12, color: t.muted, marginBottom: 12, fontStyle: "italic" }}>{displayHandle}</div>
           <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginBottom: 16 }}>
             <TrustBadge score={displayTrust} t={t} />
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600, color: t.success, background: t.success + "12", border: `1px solid ${t.success}25`, borderRadius: 6, padding: "3px 9px" }}>
-              <Icon name="BadgeCheck" size={12} color={t.success} /> Aadhaar Verified
-            </span>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8 }}>
             {stats.map(s => <div key={s.label} style={{ textAlign: "center", padding: "10px 0", background: t.bg, borderRadius: 8 }}><div style={{ fontSize: 20, fontWeight: 700, color: t.accent }}>{s.value}</div><div style={{ fontSize: 9, color: t.muted, textTransform: "uppercase", letterSpacing: 1.5 }}>{s.label}</div></div>)}
@@ -229,7 +219,9 @@ export function ProfileScreen({ t, lang, setLang, go }: { t: Theme; lang: string
 
       <Card t={t}>
         <div style={{ fontSize: 14, fontWeight: 700, color: t.text, marginBottom: 14 }}>✦ TrustScore Breakdown</div>
-        {trustBars.map(item => (
+        {trustBars.length === 0 ? (
+          <div style={{ fontSize: 13, color: t.muted, lineHeight: 1.5 }}>No TrustScore activity yet. Complete trips and verifications to build your score.</div>
+        ) : trustBars.map(item => (
           <div key={item.label} style={{ marginBottom: 12 }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
               <span style={{ fontSize: 13, color: t.text }}>{item.label}</span>
@@ -240,9 +232,6 @@ export function ProfileScreen({ t, lang, setLang, go }: { t: Theme; lang: string
             </div>
           </div>
         ))}
-        <div style={{ marginTop: 12, padding: "9px 13px", background: t.success + "10", borderRadius: 8, border: `1px solid ${t.success}18` }}>
-          <div style={{ fontSize: 12, color: t.success, fontWeight: 700 }}>✓ Solo Women Safe badge earned</div>
-        </div>
       </Card>
 
       <Card t={t}>

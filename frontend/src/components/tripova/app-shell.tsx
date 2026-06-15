@@ -97,7 +97,7 @@ export function AppShell() {
   const renderScreen = () => {
     if (dest) return <DestinationHub t={t} destId={dest} openPods={() => { setDest(null); setTab("pods"); }} openPureFind={() => { setDest(null); setTab("purefind"); }} />;
     switch (active) {
-      case "home": return <HomeScreen t={t} openDest={openDest} createdPosts={createdPosts} />;
+      case "home": return <HomeScreen t={t} openDest={openDest} openTab={goTab} createdPosts={createdPosts} />;
       case "discover": return <DiscoverScreen t={t} openDest={openDest} />;
       case "purefind": return <PureFindScreen t={t} />;
       case "pods": return <PodsScreen t={t} />;

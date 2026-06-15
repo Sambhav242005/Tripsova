@@ -14,22 +14,16 @@ interface MapRegion {
   warning: boolean;
 }
 
-const HARDCODED_MAPS: MapRegion[] = [
-  { name: "Spiti Valley", size: "48 MB", trails: 23, note: "High altitude — download recommended", warning: true },
-  { name: "Ladakh Circuit", size: "62 MB", trails: 31, note: "No connectivity in many areas", warning: true },
-  { name: "Andaman Islands", size: "28 MB", trails: 12, note: "Remote beach areas", warning: false },
-  { name: "Manali Region", size: "34 MB", trails: 18, note: "Rohtang Pass area", warning: false },
-];
-
 function regionSlug(name: string): string {
   return name.toLowerCase().replace(/\s+/g, "-");
 }
 
 export function OfflineMapsScreen({ t }: { t: Theme }) {
-  const [maps, setMaps] = useState<MapRegion[]>(HARDCODED_MAPS);
-  const [downloaded, setDownloaded] = useState<Record<string, boolean>>({ "Spiti Valley": true });
+  const [maps, setMaps] = useState<MapRegion[]>([]);
+  const [downloaded, setDownloaded] = useState<Record<string, boolean>>({});
   const [downloading, setDownloading] = useState<Record<string, boolean>>({});
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
@@ -49,7 +43,9 @@ export function OfflineMapsScreen({ t }: { t: Theme }) {
           setDownloaded(dl);
         }
       } catch {
-        // fall back to hardcoded maps
+        // no packs available — empty state shown below
+      } finally {
+        setLoading(false);
       }
     })();
   }, []);
@@ -75,6 +71,12 @@ export function OfflineMapsScreen({ t }: { t: Theme }) {
       </div>
       {downloadError && (
         <div style={{ padding: "10px 14px", borderRadius: 8, background: t.danger + "15", border: `1px solid ${t.danger}30`, color: t.danger, fontSize: 12, marginBottom: 12 }}>{downloadError}</div>
+      )}
+      {!loading && maps.length === 0 && (
+        <Card t={t} style={{ textAlign: "center", padding: "40px 20px" }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: t.text, marginBottom: 6 }}>No offline maps yet</div>
+          <div style={{ fontSize: 13, color: t.muted, lineHeight: 1.5 }}>Map packs will appear here once regions are available to download.</div>
+        </Card>
       )}
       {maps.map(m => (
         <Card key={m.name} t={t}>

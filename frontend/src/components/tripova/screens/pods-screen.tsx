@@ -2,9 +2,8 @@
 
 import React, { useState, useEffect, useCallback, startTransition } from "react";
 import type { Theme } from "@/data";
-import { PODS, CURRENT_USER } from "@/data";
 import { Avatar } from "../primitives/avatar";
-import { Btn } from "../primitives/index";
+import { Btn, ScreenHeader } from "../primitives/index";
 import { Icon } from "../icon";
 import { CompatBadge, TrustBadge, InterestChip, FoodBadge } from "../badges/index";
 import { api, ApiError } from "@/lib/api";
@@ -39,20 +38,20 @@ function transformPod(p: TripPodResponse, idx: number) {
     budget: p.budget ? `₹${p.budget.toLocaleString("en-IN")}` : "₹—",
     spots,
     size: p.max_members || 5,
-    host: CURRENT_USER.name,
-    hostAvatar: CURRENT_USER.avatar,
-    score: CURRENT_USER.trust,
-    podRating: 4.0,
+    host: "Trip host",
+    hostAvatar: (p.title || "Pod").slice(0, 2).toUpperCase(),
+    score: 0,
+    podRating: 0,
     pastPods: 0,
     style: travelStyle || STYLES[idx % STYLES.length],
-    verified: false,
-    compatibility: 50,
+    verified: p.verification_required ?? false,
+    compatibility: 0,
     intro: "Join this trip and explore together with fellow travellers!",
     voice: "Say hi to the group",
-    interests: CURRENT_USER.foods?.length ? ["Food Exploration"] : [],
+    interests: [],
     description: p.title || "",
     gradient: GRADIENTS[idx % GRADIENTS.length],
-    groupFoods: CURRENT_USER.foods || [],
+    groupFoods: [],
   };
 }
 
@@ -96,7 +95,7 @@ export function PodsScreen({ t }: { t: Theme }) {
       setApiItems(res.items.map((p, i) => transformPod(p, i)));
     } catch (e) {
       setApiItems(null);
-      setError(e instanceof ApiError ? "Couldn't load live pods. Showing sample data." : "Failed to load pods");
+      setError(e instanceof ApiError ? "Couldn't load live pods." : "Failed to load pods");
     } finally {
       setLoading(false);
     }
@@ -104,10 +103,11 @@ export function PodsScreen({ t }: { t: Theme }) {
 
   useEffect(() => { startTransition(() => { fetchPods(); }); }, [fetchPods]);
 
-  const displayPods = apiItems ?? PODS;
+  const displayPods = apiItems ?? [];
 
   return (
-    <div style={{ padding: "0 16px 110px" }}>
+    <div style={{ padding: "16px 16px 110px" }}>
+      <ScreenHeader t={t} eyebrow="Travel together" title="TripPods" subtitle="Find verified companions heading your way." />
       <div style={{ display: "flex", background: t.tag, borderRadius: 12, padding: 3, marginBottom: 20 }}>
         {["find", "mine"].map(tb => (
           <button

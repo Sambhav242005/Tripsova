@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from "react";
 import type { Theme } from "@/data";
-import { FAMILY_MEMBERS } from "@/data";
 import type { FamilyMember } from "@/data";
 import { Card, Btn, SectionTitle } from "../primitives/index";
 import { api } from "@/lib/api";
@@ -10,7 +9,7 @@ import type { UserResponse } from "@/lib/types";
 
 export function FamilyScreen({ t }: { t: Theme }) {
   const [checkin, setCheckin] = useState(false);
-  const [members, setMembers] = useState<FamilyMember[]>(FAMILY_MEMBERS);
+  const [members, setMembers] = useState<FamilyMember[]>([]);
 
   useEffect(() => {
     (async () => {
@@ -27,9 +26,9 @@ export function FamilyScreen({ t }: { t: Theme }) {
           trip: null,
           checkins: 0,
         };
-        setMembers([self, ...FAMILY_MEMBERS]);
+        setMembers([self]);
       } catch {
-        // fall back to hardcoded family members
+        // not signed in — no members to show
       }
     })();
   }, []);
@@ -56,6 +55,13 @@ export function FamilyScreen({ t }: { t: Theme }) {
       </Card>
 
       <SectionTitle t={t}>Family Members</SectionTitle>
+      {members.filter(m => m.id !== 0).length === 0 && (
+        <Card t={t}>
+          <div style={{ fontSize: 13, color: t.muted, lineHeight: 1.5, textAlign: "center", padding: "8px 4px" }}>
+            No family members yet. Invite loved ones below to share your trips with them.
+          </div>
+        </Card>
+      )}
       {members.map(m => (
         <Card key={m.id} t={t}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>

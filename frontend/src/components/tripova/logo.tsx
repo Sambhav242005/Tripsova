@@ -1,8 +1,9 @@
 import React from "react";
 
-// Tripsova brand mark: a location pin / teardrop framing a moonlit mountain scene.
-// Recreated as inline SVG (not the raster logo) so it scales crisply and themes cleanly.
-export function LogoMark({ size = 32, rounded = 10 }: { size?: number; rounded?: number }) {
+// Tripsova brand mark: a deep-navy disc with a gold serif "T", an airplane
+// taking off, and a dashed flight-path orbit. Recreated as inline SVG (not the
+// raster logo) so it scales crisply and themes cleanly across light/dark.
+export function LogoMark({ size = 32 }: { size?: number; rounded?: number }) {
   const id = React.useId();
   return (
     <svg
@@ -15,28 +16,50 @@ export function LogoMark({ size = 32, rounded = 10 }: { size?: number; rounded?:
       aria-label="Tripsova logo"
     >
       <defs>
-        <linearGradient id={`${id}-bg`} x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#243349" />
-          <stop offset="1" stopColor="#0F1722" />
+        <radialGradient id={`${id}-bg`} cx="0.32" cy="0.26" r="0.95">
+          <stop stopColor="#21365C" />
+          <stop offset="1" stopColor="#0C1730" />
+        </radialGradient>
+        <linearGradient id={`${id}-gold`} x1="12" y1="8" x2="38" y2="40" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#EBD292" />
+          <stop offset="0.55" stopColor="#D4B06A" />
+          <stop offset="1" stopColor="#B98E3F" />
         </linearGradient>
-        <linearGradient id={`${id}-pin`} x1="14" y1="8" x2="34" y2="40" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#8AB0D6" />
-          <stop offset="1" stopColor="#3F6695" />
-        </linearGradient>
-        <clipPath id={`${id}-c`}>
-          <circle cx="24" cy="20.5" r="8.5" />
-        </clipPath>
       </defs>
-      <rect width="48" height="48" rx={rounded} fill={`url(#${id}-bg)`} />
+
+      {/* navy disc with a faint gold rim */}
+      <circle cx="24" cy="24" r="23" fill={`url(#${id}-bg)`} />
+      <circle cx="24" cy="24" r="23" fill="none" stroke={`url(#${id}-gold)`} strokeOpacity="0.35" strokeWidth="1" />
+
+      {/* dashed flight-path orbit sweeping up to the plane */}
       <path
-        d="M24 9c6.6 0 12 5.2 12 11.7 0 8-12 18.3-12 18.3S12 28.7 12 20.7C12 14.2 17.4 9 24 9Z"
-        fill={`url(#${id}-pin)`}
+        d="M12.5 30.5 C 18.5 36.5, 30.5 33.5, 35 19.5"
+        stroke={`url(#${id}-gold)`}
+        strokeWidth="1.3"
+        strokeLinecap="round"
+        strokeDasharray="0.4 3.1"
+        fill="none"
       />
-      <circle cx="24" cy="20.5" r="8.5" fill="#0F1722" />
-      <g clipPath={`url(#${id}-c)`}>
-        <circle cx="28.5" cy="16" r="2.6" fill="#D4B483" />
-        <path d="M14 29 19 22 22.5 26 26 20.5 34 29Z" fill="#7CA3CC" />
-        <path d="M14 29 20.5 24 25 29Z" fill="#A9C4E0" />
+
+      {/* serif T */}
+      <text
+        x="22.5"
+        y="33"
+        textAnchor="middle"
+        fontFamily="var(--font-dm-serif), Georgia, 'Times New Roman', serif"
+        fontSize="27"
+        fontWeight={500}
+        fill={`url(#${id}-gold)`}
+      >
+        T
+      </text>
+
+      {/* airplane lifting off (lucide plane silhouette) */}
+      <g transform="translate(25.5 2.4) scale(0.58)">
+        <path
+          d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"
+          fill={`url(#${id}-gold)`}
+        />
       </g>
     </svg>
   );
@@ -59,9 +82,10 @@ export function Logo({
       <div style={{ lineHeight: 1 }}>
         <div
           style={{
+            fontFamily: "var(--font-dm-serif), Georgia, serif",
             fontSize: Math.round(size * 0.56),
-            fontWeight: 800,
-            letterSpacing: 0.2,
+            fontWeight: 600,
+            letterSpacing: 1.2,
             color: color || "#1B263B",
           }}
         >
@@ -74,7 +98,7 @@ export function Logo({
               fontWeight: 700,
               letterSpacing: 0.5,
               color: taglineColor || "#B0894A",
-              marginTop: 2,
+              marginTop: 3,
             }}
           >
             Discover through people.

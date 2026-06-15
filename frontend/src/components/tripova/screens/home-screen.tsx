@@ -2,13 +2,53 @@
 
 import React, { useState, useEffect, useCallback, startTransition } from "react";
 import type { Theme, FeedPost, Destination } from "@/data";
-import type { FeedPostResponse, PaginatedList } from "@/lib/types";
-import { FEED_POSTS, STORIES, COMMUNITY_ACTIVITY, COMMUNITY_COUNTER, STORY_FEED, DESTINATIONS, CAT_COLORS } from "@/data";
+import type { FeedPostResponse, FoodPlaceResponse, TripPodResponse, PaginatedList } from "@/lib/types";
+import { CAT_COLORS } from "@/data";
 import { Icon } from "../icon";
 import { Avatar } from "../primitives/avatar";
-import { SectionTitle } from "../primitives/index";
 import { TrustBadge, PoweredBy } from "../badges/index";
 import { api } from "@/lib/api";
+import { useDestinations } from "@/lib/destinations";
+
+const PREVIEW_GRADIENTS = [
+  "linear-gradient(150deg,#1E2740,#5A6B96)",
+  "linear-gradient(150deg,#5A4F3E,#C2A878)",
+  "linear-gradient(150deg,#1B3A47,#5E97A8)",
+  "linear-gradient(150deg,#243A33,#6E8C7E)",
+];
+
+// ── Branded section header: serif title + gold eyebrow, optional "see all" ──
+function SectionHeader({
+  t, eyebrow, title, subtitle, action,
+}: {
+  t: Theme; eyebrow: string; title: string; subtitle?: string;
+  action?: { label: string; onClick: () => void };
+}) {
+  return (
+    <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12, marginBottom: 14 }}>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 6 }}>
+          <span style={{ width: 16, height: 2, borderRadius: 2, background: t.goldFill }} />
+          <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1.4, textTransform: "uppercase", color: t.secondary }}>{eyebrow}</span>
+        </div>
+        <div style={{ fontFamily: "var(--font-dm-serif), Georgia, serif", fontSize: 23, color: t.heading, lineHeight: 1.1 }}>{title}</div>
+        {subtitle && <div style={{ fontSize: 12.5, color: t.muted, marginTop: 4, lineHeight: 1.4 }}>{subtitle}</div>}
+      </div>
+      {action && (
+        <button
+          onClick={action.onClick}
+          style={{
+            flexShrink: 0, display: "flex", alignItems: "center", gap: 3,
+            background: "transparent", border: "none", cursor: "pointer",
+            color: t.accent, fontSize: 12.5, fontWeight: 700, padding: "4px 0",
+          }}
+        >
+          {action.label} <Icon name="ChevronRight" size={15} color={t.accent} />
+        </button>
+      )}
+    </div>
+  );
+}
 
 function DestTile({ d, t, openDest, w = 150, h = 190 }: { d: Destination; t: Theme; openDest: (id: string) => void; w?: number; h?: number }) {
   return (
@@ -23,14 +63,16 @@ function DestTile({ d, t, openDest, w = 150, h = 190 }: { d: Destination; t: The
       onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)"; }}
       onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "none"; }}
     >
-      <div style={{
-        position: "absolute", top: 10, right: 10,
-        background: "rgba(255,255,255,0.9)", backdropFilter: "blur(4px)",
-        borderRadius: 8, padding: "3px 9px", fontSize: 11, fontWeight: 800,
-        color: "#1F1D1A", display: "flex", alignItems: "center", gap: 3,
-      }}>
-        <Icon name="ShieldCheck" size={11} color="#4A8A5E" /> {d.trust}
-      </div>
+      {d.trust > 0 && (
+        <div style={{
+          position: "absolute", top: 10, right: 10,
+          background: "rgba(255,255,255,0.9)", backdropFilter: "blur(4px)",
+          borderRadius: 8, padding: "3px 9px", fontSize: 11, fontWeight: 800,
+          color: "#1F1D1A", display: "flex", alignItems: "center", gap: 3,
+        }}>
+          <Icon name="ShieldCheck" size={11} color="#4A8A5E" /> {d.trust}
+        </div>
+      )}
       <div style={{
         position: "absolute", bottom: 0, left: 0, right: 0,
         padding: "28px 12px 12px",
@@ -38,14 +80,20 @@ function DestTile({ d, t, openDest, w = 150, h = 190 }: { d: Destination; t: The
       }}>
         <div style={{ color: "#fff", fontSize: 17, fontWeight: 600, letterSpacing: 0.2 }}>{d.name}</div>
         <div style={{ color: "rgba(255,255,255,0.85)", fontSize: 11, marginTop: 2, display: "flex", alignItems: "center", gap: 4 }}>
-          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#6BBF7C", display: "inline-block" }} /> {d.exploring} exploring now
+          {d.exploring > 0 ? (
+            <>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#6BBF7C", display: "inline-block" }} /> {d.exploring} exploring now
+            </>
+          ) : (
+            d.country
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-function PostCard({ post, t, openDest, idx = 0 }: { post: FeedPost; t: Theme; openDest?: (id: string) => void; idx?: number }) {
+function PostCard({ post, t, openDest }: { post: FeedPost; t: Theme; openDest?: (id: string) => void }) {
   const [helped, setHelped] = useState(false);
   const catColor = CAT_COLORS[post.category] || t.secondary;
   const apiId = post._apiId;
@@ -139,6 +187,78 @@ function PostCard({ post, t, openDest, idx = 0 }: { post: FeedPost; t: Theme; op
   );
 }
 
+// ── TripPod preview card (compact) ──
+function PodPreview({ pod, t, idx, onClick }: { pod: TripPodResponse; t: Theme; idx: number; onClick: () => void }) {
+  const fmt = (d: string) => new Date(d).toLocaleDateString("en-IN", { month: "short", day: "numeric" });
+  const dates = pod.start_date && pod.end_date ? `${fmt(pod.start_date)}–${fmt(pod.end_date)}` : pod.start_date ? `${fmt(pod.start_date)} onwards` : "Flexible";
+  const spots = Math.max(0, (pod.max_members || 5) - (pod.member_count || 0));
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        flexShrink: 0, width: 230, background: t.card, borderRadius: 18, overflow: "hidden",
+        border: `1px solid ${t.border}`, cursor: "pointer", boxShadow: `0 1px 3px ${t.overlay}`,
+      }}
+    >
+      <div style={{ height: 64, background: PREVIEW_GRADIENTS[idx % PREVIEW_GRADIENTS.length], position: "relative" }}>
+        {pod.verification_required && (
+          <span style={{ position: "absolute", top: 9, right: 9, display: "inline-flex", alignItems: "center", gap: 3, background: "rgba(255,255,255,0.92)", borderRadius: 6, padding: "3px 7px", fontSize: 10, fontWeight: 700, color: t.accent }}>
+            <Icon name="BadgeCheck" size={10} color={t.secondary} /> Verified
+          </span>
+        )}
+      </div>
+      <div style={{ padding: 13 }}>
+        <div style={{ fontSize: 15, fontWeight: 700, color: t.heading, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{pod.title || "Untitled Pod"}</div>
+        <div style={{ fontSize: 11.5, color: t.muted, marginTop: 3, display: "flex", alignItems: "center", gap: 4 }}>
+          <Icon name="Calendar" size={11} color={t.muted} /> {dates}
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 11 }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: t.accent }}>{pod.budget ? `₹${pod.budget.toLocaleString("en-IN")}` : "₹—"}</span>
+          <span style={{ fontSize: 11, fontWeight: 700, color: spots <= 1 ? t.danger : t.success }}>{spots} spots left</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── PureFind preview row (compact) ──
+function FoodPreview({ place, t, idx, onClick }: { place: FoodPlaceResponse; t: Theme; idx: number; onClick: () => void }) {
+  const tags = (place.diet_tags || []).slice(0, 3);
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        display: "flex", gap: 12, alignItems: "center", background: t.card, borderRadius: 16,
+        padding: 12, marginBottom: 10, border: `1px solid ${t.border}`, cursor: "pointer",
+        boxShadow: `0 1px 3px ${t.overlay}`,
+      }}
+    >
+      <div style={{ width: 54, height: 54, borderRadius: 12, background: PREVIEW_GRADIENTS[idx % PREVIEW_GRADIENTS.length], flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <Icon name="Salad" size={22} color="rgba(255,255,255,0.92)" />
+      </div>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ fontSize: 14.5, fontWeight: 700, color: t.heading, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{place.name}</div>
+        {place.address && (
+          <div style={{ fontSize: 11.5, color: t.muted, marginTop: 2, display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <Icon name="MapPin" size={11} color={t.muted} /> {place.address}
+          </div>
+        )}
+        {tags.length > 0 && (
+          <div style={{ display: "flex", gap: 5, marginTop: 7, flexWrap: "wrap" }}>
+            {tags.map(tag => <span key={tag} style={{ fontSize: 10.5, color: t.muted, background: t.tag, padding: "2px 8px", borderRadius: 6 }}>{tag}</span>)}
+          </div>
+        )}
+      </div>
+      <div style={{ textAlign: "right", flexShrink: 0 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 700, color: t.warning, display: "flex", alignItems: "center", gap: 3, justifyContent: "flex-end" }}>
+          <Icon name="Star" size={12} color={t.warning} /> {Math.round(place.food_score * 10) / 10}
+        </div>
+        {place.verified_count > 0 && <div style={{ fontSize: 10.5, color: t.success, marginTop: 2 }}>{place.verified_count} verified</div>}
+      </div>
+    </div>
+  );
+}
+
 function transformPost(p: FeedPostResponse) {
   const created = new Date(p.created_at + 'Z');
   const now = new Date();
@@ -173,10 +293,13 @@ function transformPost(p: FeedPostResponse) {
   };
 }
 
-export function HomeScreen({ t, openDest, createdPosts = [] }: { t: Theme; openDest: (id: string) => void; createdPosts?: FeedPostResponse[] }) {
+export function HomeScreen({ t, openDest, openTab, createdPosts = [] }: { t: Theme; openDest: (id: string) => void; openTab?: (id: string) => void; createdPosts?: FeedPostResponse[] }) {
   const [apiPosts, setApiPosts] = useState<FeedPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [pods, setPods] = useState<TripPodResponse[]>([]);
+  const [foods, setFoods] = useState<FoodPlaceResponse[]>([]);
+  const { destinations, loading: destLoading } = useDestinations(10);
 
   const fetchFeed = useCallback(async () => {
     setLoading(true);
@@ -193,135 +316,34 @@ export function HomeScreen({ t, openDest, createdPosts = [] }: { t: Theme; openD
 
   useEffect(() => {
     startTransition(() => { fetchFeed(); });
+    // TripPod + PureFind previews — best-effort, fail silently into hidden sections
+    api.get<PaginatedList<TripPodResponse>>("/api/trippods")
+      .then(d => setPods(d.items.slice(0, 4)))
+      .catch(() => setPods([]));
+    api.get<FoodPlaceResponse[]>("/api/food")
+      .then(d => setFoods(d.slice(0, 3)))
+      .catch(() => setFoods([]));
   }, [fetchFeed]);
 
   const allCreated = createdPosts.map(transformPost);
-
-  let feedItems: FeedPost[];
-  let showFallback = false;
-  if (loading) {
-    feedItems = [];
-  } else if (error) {
-    feedItems = [...allCreated, ...FEED_POSTS];
-    showFallback = true;
-  } else if (apiPosts.length === 0) {
-    feedItems = allCreated.length > 0 ? allCreated : [];
-  } else {
-    feedItems = [...allCreated, ...apiPosts];
-  }
+  const feedItems: FeedPost[] = loading ? [] : [...allCreated, ...apiPosts];
 
   return (
-    <div style={{ padding: "0 16px 110px" }}>
-      <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 8, marginBottom: 20, scrollbarWidth: "none" }}>
-        {COMMUNITY_COUNTER.map((c, i) => (
-          <div
-            key={i}
-            style={{
-              flexShrink: 0, minWidth: 140,
-              background: i === 0 ? `linear-gradient(135deg,${t.accent},${t.teal})` : t.card,
-              border: i === 0 ? "none" : `1px solid ${t.border}`,
-              borderRadius: 18, padding: "14px 16px",
-              boxShadow: `0 1px 3px ${t.overlay}, 0 4px 12px ${t.overlay}`,
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-              <div style={{
-                width: 28, height: 28, borderRadius: 8,
-                background: i === 0 ? "rgba(255,255,255,0.15)" : t.tag,
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}>
-                <Icon name={c.icon} size={14} color={i === 0 ? t.goldFill : t.secondary} />
-              </div>
-              {i === 0 && <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#6BBF7C", display: "inline-block" }} />}
-            </div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: i === 0 ? "#fff" : t.heading, lineHeight: 1, letterSpacing: -0.5 }}>{c.value}</div>
-            <div style={{ fontSize: 11, color: i === 0 ? "rgba(255,255,255,0.8)" : t.muted, marginTop: 4, lineHeight: 1.3 }}>{c.label}</div>
-          </div>
-        ))}
-      </div>
-
-      <div style={{ display: "flex", gap: 16, overflowX: "auto", paddingBottom: 8, marginBottom: 24, scrollbarWidth: "none" }}>
-        {STORIES.map(s => (
-          <button
-            key={s.id}
-            onClick={() => !s.own && s.destId && openDest(s.destId)}
-            style={{
-              background: "transparent", border: "none", cursor: "pointer",
-              display: "flex", flexDirection: "column", alignItems: "center",
-              gap: 6, flexShrink: 0, padding: 0,
-            }}
-          >
-            <div style={{
-              width: 64, height: 64, borderRadius: "50%", padding: s.own ? 0 : 3,
-              background: s.own ? "transparent" : (s.seen ? t.border : `linear-gradient(135deg,${t.gold},${t.teal})`),
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}>
-              <div style={{
-                width: "100%", height: "100%", borderRadius: "50%",
-                border: `2px solid ${t.bg}`, position: "relative",
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}>
-                <Avatar initials={s.avatar} size={s.own ? 64 : 56} t={t} />
-                {s.own && (
-                  <div style={{
-                    position: "absolute", bottom: -1, right: -1,
-                    width: 22, height: 22, borderRadius: "50%",
-                    background: t.accent, border: `2px solid ${t.bg}`,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                  }}>
-                    <Icon name="Plus" size={12} color="#fff" />
-                  </div>
-                )}
-              </div>
-            </div>
-            <span style={{ fontSize: 11, color: t.text, fontWeight: 500, maxWidth: 64, overflow: "hidden", textOverflow: "ellipsis" }}>
-              {s.own ? "Your story" : s.user}
-            </span>
-          </button>
-        ))}
-      </div>
-
-      <SectionTitle t={t}>Community Activity</SectionTitle>
-      <div style={{
-        background: t.card, borderRadius: 20, border: `1px solid ${t.border}`,
-        padding: "2px 16px", marginBottom: 24,
-        boxShadow: `0 1px 3px ${t.overlay}`,
-      }}>
-        {COMMUNITY_ACTIVITY.map((a, i) => (
-          <div
-            key={a.id}
-            style={{
-              display: "flex", alignItems: "center", gap: 12,
-              padding: "12px 0",
-              borderBottom: i < COMMUNITY_ACTIVITY.length - 1 ? `1px solid ${t.border}` : "none",
-            }}
-          >
-            <div style={{
-              width: 34, height: 34, borderRadius: 10,
-              background: t[a.color as keyof Theme] + "15",
-              display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-            }}>
-              <Icon name={a.icon} size={16} color={t[a.color as keyof Theme]} />
-            </div>
-            <div style={{ flex: 1, fontSize: 13, color: t.text, lineHeight: 1.45 }}>{a.text}</div>
-            <span style={{ fontSize: 11, color: t.muted, flexShrink: 0 }}>{a.time}</span>
-          </div>
-        ))}
-      </div>
-
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: t.muted, letterSpacing: 1.2, textTransform: "uppercase" }}>Nearby Traveller Updates</span>
+    <div style={{ padding: "16px 16px 110px" }}>
+      {/* ───────────────────────── 1 · CityFeed ───────────────────────── */}
+      <SectionHeader t={t} eyebrow="Your city · Live" title="CityFeed" subtitle="Fresh, time-sensitive updates from travellers around you." />
+      <div style={{ marginBottom: 14, display: "flex", justifyContent: "flex-end" }}>
         <PoweredBy t={t} />
       </div>
 
-      {showFallback && error && (
+      {error && (
         <div style={{
           display: "flex", alignItems: "center", gap: 8, marginBottom: 12,
           padding: "10px 14px", background: t.danger + "08",
           borderRadius: 12, border: `1px solid ${t.danger}20`,
         }}>
           <Icon name="AlertTriangle" size={14} color={t.danger} />
-          <span style={{ fontSize: 12, color: t.muted, flex: 1 }}>{error} — showing cached posts</span>
+          <span style={{ fontSize: 12, color: t.muted, flex: 1 }}>{error}</span>
           <button
             onClick={fetchFeed}
             style={{
@@ -350,7 +372,7 @@ export function HomeScreen({ t, openDest, createdPosts = [] }: { t: Theme; openD
             <div style={{ width: "60%", height: 12, background: t.tag, borderRadius: 6 }} />
           </div>
         ))
-      ) : !showFallback && apiPosts.length === 0 && allCreated.length === 0 ? (
+      ) : !error && feedItems.length === 0 ? (
         <div style={{
           textAlign: "center", padding: "48px 24px",
           background: t.card, borderRadius: 20, border: `1px solid ${t.border}`,
@@ -366,63 +388,40 @@ export function HomeScreen({ t, openDest, createdPosts = [] }: { t: Theme; openD
           <div style={{ fontSize: 13, color: t.muted, marginTop: 6, lineHeight: 1.5 }}>Be the first to share a travel update from your trip!</div>
         </div>
       ) : (
-        feedItems.map((post, idx) => <PostCard key={post._apiId ?? post.id} post={post} t={t} openDest={openDest} idx={idx} />)
+        feedItems.map(post => <PostCard key={post._apiId ?? post.id} post={post} t={t} openDest={openDest} />)
       )}
 
-      <div style={{ marginTop: 4, marginBottom: 24 }}>
-        <SectionTitle t={t}>Traveller Stories</SectionTitle>
-        <div style={{ display: "flex", gap: 14, overflowX: "auto", paddingBottom: 8, scrollbarWidth: "none" }}>
-          {STORY_FEED.map(s => (
-            <div
-              key={s.id}
-              onClick={() => openDest(s.destId)}
-              style={{
-                flexShrink: 0, width: 260,
-                background: t.card, borderRadius: 20,
-                border: `1px solid ${t.border}`,
-                overflow: "hidden", cursor: "pointer",
-                boxShadow: `0 1px 3px ${t.overlay}`,
-              }}
-            >
-              <div style={{
-                height: 130, background: s.gradient, position: "relative",
-              }}>
-                <div style={{
-                  position: "absolute", bottom: 10, left: 14,
-                  display: "flex", alignItems: "center", gap: 8,
-                }}>
-                  <Avatar initials={s.avatar} size={28} t={t} />
-                  <span style={{ color: "#fff", fontSize: 12.5, fontWeight: 700 }}>{s.user}</span>
-                </div>
-              </div>
-              <div style={{ padding: 14 }}>
-                <div style={{
-                  fontSize: 11, color: t.teal, fontWeight: 700, marginBottom: 5,
-                  display: "flex", alignItems: "center", gap: 4,
-                }}>
-                  <Icon name="MapPin" size={11} color={t.teal} /> {s.place}
-                </div>
-                <div style={{ fontSize: 16, fontWeight: 600, color: t.heading, lineHeight: 1.2, marginBottom: 6 }}>
-                  {s.title}
-                </div>
-                <div style={{ fontSize: 13, color: t.muted, lineHeight: 1.5, marginBottom: 10 }}>
-                  {s.excerpt}
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: t.danger, fontWeight: 600 }}>
-                  <Icon name="Heart" size={13} color={t.danger} /> {s.likes}
-                </div>
-              </div>
-            </div>
-          ))}
+      {/* ───────────────────────── 2 · Trip Pulse ───────────────────────── */}
+      {(destLoading || (destinations && destinations.length > 0)) && (
+        <div style={{ marginTop: 30 }}>
+          <SectionHeader t={t} eyebrow="Trending now" title="Trip Pulse" subtitle="Where the community is heading this week." />
+          <div style={{ display: "flex", gap: 14, overflowX: "auto", paddingBottom: 8, scrollbarWidth: "none" }}>
+            {destLoading
+              ? [...Array(3)].map((_, i) => (
+                  <div key={i} style={{ flexShrink: 0, width: 150, height: 190, borderRadius: 20, background: t.tag }} />
+                ))
+              : destinations!.slice(0, 6).map(d => <DestTile key={d.id} d={d} t={t} openDest={openDest} />)}
+          </div>
         </div>
-      </div>
+      )}
 
-      <div>
-        <SectionTitle t={t}>Recommended For You</SectionTitle>
-        <div style={{ display: "flex", gap: 14, overflowX: "auto", paddingBottom: 8, scrollbarWidth: "none" }}>
-          {DESTINATIONS.slice(0, 5).map(d => <DestTile key={d.id} d={d} t={t} openDest={openDest} w={140} h={175} />)}
+      {/* ───────────────────────── 3 · TripPod ───────────────────────── */}
+      {pods.length > 0 && (
+        <div style={{ marginTop: 30 }}>
+          <SectionHeader t={t} eyebrow="Travel together" title="TripPod" subtitle="Verified companions for your next trip." action={openTab ? { label: "See all", onClick: () => openTab("pods") } : undefined} />
+          <div style={{ display: "flex", gap: 14, overflowX: "auto", paddingBottom: 8, scrollbarWidth: "none" }}>
+            {pods.map((pod, i) => <PodPreview key={pod.id} pod={pod} t={t} idx={i} onClick={() => openTab && openTab("pods")} />)}
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* ───────────────────────── 4 · PureFind ───────────────────────── */}
+      {foods.length > 0 && (
+        <div style={{ marginTop: 30 }}>
+          <SectionHeader t={t} eyebrow="Eat with confidence" title="PureFind" subtitle="Diet-aware places, verified by travellers." action={openTab ? { label: "Open PureFind", onClick: () => openTab("purefind") } : undefined} />
+          {foods.map((place, i) => <FoodPreview key={place.id} place={place} t={t} idx={i} onClick={() => openTab && openTab("purefind")} />)}
+        </div>
+      )}
     </div>
   );
 }

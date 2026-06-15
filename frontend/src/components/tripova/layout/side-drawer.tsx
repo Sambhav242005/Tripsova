@@ -2,16 +2,24 @@
 
 import React from "react";
 import type { Theme } from "@/data";
-import { DESTINATIONS, LANGUAGES } from "@/data";
 import { Icon } from "../icon";
 import { useApp } from "../app-provider";
+import { useAuth } from "../auth/auth-context";
+import { useDestinations } from "@/lib/destinations";
 
 const Eyebrow = ({ children, t }: { children: React.ReactNode; t: Theme }) => (
   <div style={{ fontSize: 10, fontWeight: 700, color: t.muted, letterSpacing: 1.5, textTransform: "uppercase", padding: "4px 12px", marginTop: 6 }}>{children}</div>
 );
 
+function getInitials(name?: string): string {
+  if (!name) return "TR";
+  return name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
+}
+
 export function SideDrawer() {
   const { t, dark, setDark, tab, setTab, sub, setSub, drawerOpen, setDrawerOpen, dest, setDest } = useApp();
+  const { user } = useAuth();
+  const { destinations } = useDestinations(10);
 
   const primary = [
     { id: "home", icon: "House", label: "Home" },
@@ -29,7 +37,7 @@ export function SideDrawer() {
     { id: "budget", icon: "Wallet", label: "Budget Tracker" },
     { id: "maps", icon: "MapPinned", label: "Offline Maps" },
   ];
-  const saved = DESTINATIONS.filter(d => d.save || d.follow).concat(DESTINATIONS).slice(0, 3);
+  const saved = (destinations ?? []).slice(0, 3);
 
   const active = dest ? "dest" : (sub || tab);
 
@@ -64,17 +72,21 @@ export function SideDrawer() {
           <button onClick={() => setDrawerOpen(false)} style={{ position: "absolute", top: 14, right: 14, width: 32, height: 32, borderRadius: "50%", border: "none", background: "rgba(255,255,255,0.18)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <Icon name="X" size={17} color="#fff" />
           </button>
-          <div style={{ width: 54, height: 54, borderRadius: "50%", background: "rgba(255,255,255,0.92)", display: "flex", alignItems: "center", justifyContent: "center", color: t.accent, fontSize: 19, fontWeight: 800, marginBottom: 11 }}>AK</div>
-          <div style={{ fontSize: 20, color: "#fff" }}>Aakash Kumar</div>
-          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.82)", marginBottom: 11 }}>@aakash.travels</div>
-          <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "rgba(255,255,255,0.92)", borderRadius: 6, padding: "3px 9px", fontSize: 11, fontWeight: 800, color: t.accent }}>
-              <Icon name="ShieldCheck" size={12} color={t.success} /> TrustScore 88
-            </span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "rgba(255,255,255,0.2)", borderRadius: 6, padding: "3px 9px", fontSize: 11, fontWeight: 700, color: "#fff" }}>
-              <Icon name="BadgeCheck" size={12} color="#fff" /> Aadhaar
-            </span>
-          </div>
+          <div style={{ width: 54, height: 54, borderRadius: "50%", background: "rgba(255,255,255,0.92)", display: "flex", alignItems: "center", justifyContent: "center", color: t.accent, fontSize: 19, fontWeight: 800, marginBottom: 11 }}>{getInitials(user?.name)}</div>
+          <div style={{ fontSize: 20, color: "#fff" }}>{user?.name || "Traveller"}</div>
+          {user?.email && <div style={{ fontSize: 12, color: "rgba(255,255,255,0.82)", marginBottom: 11 }}>{user.email}</div>}
+          {user && (
+            <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "rgba(255,255,255,0.92)", borderRadius: 6, padding: "3px 9px", fontSize: 11, fontWeight: 800, color: t.accent }}>
+                <Icon name="ShieldCheck" size={12} color={t.success} /> TrustScore {user.trust_score}
+              </span>
+              {user.verification_status === "verified" && (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "rgba(255,255,255,0.2)", borderRadius: 6, padding: "3px 9px", fontSize: 11, fontWeight: 700, color: "#fff" }}>
+                  <Icon name="BadgeCheck" size={12} color="#fff" /> Verified
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         <div style={{ padding: "10px 8px 6px", flex: 1 }}>
@@ -86,8 +98,8 @@ export function SideDrawer() {
           {manage.map(m => (
             <Row key={m.id} icon={m.icon} label={m.label} sel={active === m.id} on={() => { setSub(m.id); setDrawerOpen(false); }} />
           ))}
-          <div style={{ height: 1, background: t.border, margin: "8px 12px" }} />
-          <Eyebrow t={t}>Saved Destinations</Eyebrow>
+          {saved.length > 0 && <div style={{ height: 1, background: t.border, margin: "8px 12px" }} />}
+          {saved.length > 0 && <Eyebrow t={t}>Saved Destinations</Eyebrow>}
           {saved.map((d, i) => (
             <button key={d.id + "-" + i} onClick={() => { setDest(d.id); setDrawerOpen(false); }} style={{ display: "flex", alignItems: "center", gap: 11, width: "100%", padding: "9px 12px", borderRadius: 11, border: "none", background: "transparent", cursor: "pointer", textAlign: "left" }}>
               <div style={{ width: 34, height: 34, borderRadius: 9, background: d.gradient, flexShrink: 0 }} />

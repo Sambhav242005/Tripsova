@@ -2,12 +2,19 @@
 
 import React, { useState, useRef } from "react";
 import type { Theme } from "@/data";
-import { CURRENT_USER, CAT_COLORS, DESTINATIONS } from "@/data";
+import { CAT_COLORS } from "@/data";
 import { Icon } from "../icon";
 import { Avatar } from "../primitives/avatar";
 import { Btn } from "../primitives/index";
 import { Sheet } from "./sheet";
+import { useAuth } from "../auth/auth-context";
+import { useDestinations } from "@/lib/destinations";
 import { api, ApiError } from "@/lib/api";
+
+function getInitials(name?: string): string {
+  if (!name) return "TR";
+  return name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
+}
 import type { FeedPostResponse, FeedPostCreate, TripPodCreate, TripPodResponse } from "@/lib/types";
 
 interface CreateSheetProps {
@@ -66,6 +73,8 @@ export function CreateSheet({ open, onClose, t, onCreatePost, onCreatePod }: Cre
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const { user } = useAuth();
+  const { destinations } = useDestinations();
 
   const reset = () => { setMode(null); setText(""); setPlace(""); setCat("Food"); setPhotos([]); setPodDest(""); setPodDates(""); setPodBudget(""); setDone(false); setSubmitError(null); };
   const close = () => { reset(); onClose(); };
@@ -98,7 +107,7 @@ export function CreateSheet({ open, onClose, t, onCreatePost, onCreatePod }: Cre
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const destMatch = DESTINATIONS.find(d => podDest.toLowerCase().includes(d.name.toLowerCase()));
+      const destMatch = (destinations ?? []).find(d => podDest.toLowerCase().includes(d.name.toLowerCase()));
       const body: TripPodCreate = {
         destination_id: destMatch?.id || "",
         title: podDest,
@@ -140,8 +149,8 @@ export function CreateSheet({ open, onClose, t, onCreatePost, onCreatePod }: Cre
         ) : mode === "post" || mode === "photos" ? (
           <>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-              <Avatar initials={CURRENT_USER.avatar} size={40} t={t} />
-              <div style={{ fontSize: 15, fontWeight: 700, color: t.text }}>{CURRENT_USER.name}</div>
+              <Avatar initials={getInitials(user?.name)} size={40} t={t} />
+              <div style={{ fontSize: 15, fontWeight: 700, color: t.text }}>{user?.name || "You"}</div>
             </div>
             <textarea
               value={text}

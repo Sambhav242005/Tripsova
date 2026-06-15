@@ -18,24 +18,6 @@ export interface CurrentUser {
   referrals: number;
 }
 
-export const CURRENT_USER: CurrentUser = {
-  name: "Aakash Kumar",
-  handle: "@aakash.travels",
-  avatar: "AK",
-  trust: 88,
-  premium: true,
-  profileType: "Creator",
-  verifications: ["email", "phone", "digilocker", "frequent", "premium"],
-  followers: 1240,
-  following: 312,
-  countries: 3,
-  posts: 48,
-  trips: 12,
-  pods: 7,
-  foods: ["jain", "pure_veg"],
-  referrals: 6,
-};
-
 export const SCREEN_TITLES: Record<string, string> = {
   home: "Home",
   discover: "Discover",

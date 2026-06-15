@@ -3,12 +3,11 @@
 import React, { useState, useEffect, startTransition } from "react";
 import type { Theme, FeedPost } from "@/data";
 import type { Destination } from "@/data/destinations";
-import { getDest, FEED_POSTS, RESTAURANTS, PODS, GUIDES } from "@/data";
-import type { DestinationResponse } from "@/lib/types";
+import type { DestinationResponse, FeedPostResponse, FoodPlaceResponse, PaginatedList } from "@/lib/types";
 import { api } from "@/lib/api";
 import { Avatar } from "../primitives/avatar";
 import { Icon } from "../icon";
-import { TrustBadge, CommBadge, PoweredBy, CommunityVerified, CompatBadge } from "../badges/index";
+import { TrustBadge, CommBadge, PoweredBy, CommunityVerified } from "../badges/index";
 
 function HubSection({ title, t, action, onAction, children }: { title: string; t: Theme; action?: string; onAction?: () => void; children: React.ReactNode }) {
   return (
@@ -60,6 +59,26 @@ const GRADIENT_POOL = [
   "linear-gradient(150deg,#2A4A3F,#7A9A86)",
 ];
 
+// Neutral placeholder shown while the real destination loads — no fabricated data.
+function emptyDest(destId: string): Destination {
+  return {
+    id: destId,
+    name: destId.split("-").map(w => (w ? w[0].toUpperCase() + w.slice(1) : w)).join(" "),
+    country: "",
+    gradient: GRADIENT_POOL[0],
+    trust: 0,
+    exploring: 0,
+    updates: 0,
+    guides: 0,
+    save: false,
+    follow: false,
+    safety: "",
+    safetyLevel: "good" as const,
+    tagline: "",
+    badges: [],
+  };
+}
+
 function toUIDest(d: DestinationResponse): Destination {
   const h = (d.slug || d.id).length * 7 + d.name.length * 13;
   return {
@@ -67,13 +86,13 @@ function toUIDest(d: DestinationResponse): Destination {
     name: d.name,
     country: d.country,
     gradient: GRADIENT_POOL[Math.abs(h) % GRADIENT_POOL.length],
-    trust: 75 + Math.abs(h * 7) % 20,
-    exploring: 5 + Math.abs(h * 13) % 80,
-    updates: 20 + Math.abs(h * 17) % 200,
-    guides: 2 + Math.abs(h * 11) % 18,
+    trust: 0,
+    exploring: 0,
+    updates: 0,
+    guides: 0,
     save: false,
     follow: false,
-    safety: d.safety_summary || "Safe",
+    safety: d.safety_summary || "",
     safetyLevel: "good" as const,
     tagline: d.description
       ? d.description.slice(0, 80) + (d.description.length > 80 ? "..." : "")
@@ -82,24 +101,82 @@ function toUIDest(d: DestinationResponse): Destination {
   };
 }
 
-export function DestinationHub({ t, destId, openPods, openPureFind }: { t: Theme; destId: string; openPods?: () => void; openPureFind?: () => void }) {
-  const fallback = getDest(destId);
-  const [d, setD] = useState<Destination>(fallback);
+function transformPost(p: FeedPostResponse): FeedPost {
+  const created = new Date(p.created_at + "Z");
+  const diffMs = Date.now() - created.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHrs = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+  const time = diffMins < 1 ? "just now" : diffHrs < 1 ? `${diffMins}m ago` : diffDays < 1 ? `${diffHrs}h ago` : `${diffDays}d ago`;
+  return {
+    id: Number(p.id) || 0,
+    user: p.user_name || "Traveller",
+    avatar: p.user_avatar || "TR",
+    score: p.verification_score,
+    destId: p.destination_id || "",
+    location: p.destination_id || "Unknown",
+    category: "General",
+    time,
+    expiry: "",
+    content: p.content,
+    helpful: p.helpful_count,
+    comments: 0,
+    verified: p.verification_score >= 60,
+    _apiId: p.id,
+  };
+}
+
+interface RestUI { id: string; name: string; rating: number; verifiedBy: Record<string, number>; gradient: string; }
+
+function transformFood(p: FoodPlaceResponse, idx: number): RestUI {
+  const dietTags = p.diet_tags || [];
+  const verifiedBy: Record<string, number> = {};
+  if (p.verified_count > 0) {
+    if (dietTags.length > 0) {
+      const per = Math.max(1, Math.round(p.verified_count / dietTags.length));
+      for (const tag of dietTags) verifiedBy[tag] = per;
+    } else {
+      verifiedBy.community = p.verified_count;
+    }
+  }
+  return {
+    id: p.id,
+    name: p.name,
+    rating: Math.round(p.food_score * 10) / 10,
+    verifiedBy,
+    gradient: GRADIENT_POOL[idx % GRADIENT_POOL.length],
+  };
+}
+
+export function DestinationHub({ t, destId, openPureFind }: { t: Theme; destId: string; openPods?: () => void; openPureFind?: () => void }) {
+  const [d, setD] = useState<Destination>(() => emptyDest(destId));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(fallback.save);
-  const [following, setFollowing] = useState(fallback.follow);
-  const [ai, setAi] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  const [following, setFollowing] = useState(false);
+  const [posts, setPosts] = useState<FeedPost[]>([]);
+  const [rests, setRests] = useState<RestUI[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     startTransition(() => {
       setLoading(true);
       setError(null);
+      setD(emptyDest(destId));
+      setPosts([]);
+      setRests([]);
     });
     api.get<DestinationResponse>(`/api/destinations/${destId}`)
       .then(res => {
-        if (!cancelled) startTransition(() => setD(toUIDest(res)));
+        if (cancelled) return;
+        startTransition(() => setD(toUIDest(res)));
+        // Pull the destination's real feed posts and verified food spots.
+        api.get<PaginatedList<FeedPostResponse>>(`/api/feed?destination_id=${res.id}&per_page=3`)
+          .then(feed => { if (!cancelled) startTransition(() => setPosts(feed.items.map(transformPost))); })
+          .catch(() => {});
+        api.get<FoodPlaceResponse[]>(`/api/food?destination_id=${res.id}`)
+          .then(food => { if (!cancelled) startTransition(() => setRests(food.slice(0, 3).map(transformFood))); })
+          .catch(() => {});
       })
       .catch(() => {
         if (!cancelled) startTransition(() => setError("Could not load live destination data"));
@@ -110,18 +187,7 @@ export function DestinationHub({ t, destId, openPods, openPureFind }: { t: Theme
     return () => { cancelled = true; };
   }, [destId]);
 
-  const posts = FEED_POSTS.filter(p => p.destId === d.id).slice(0, 3);
-  const rests = RESTAURANTS.filter(r => r.destId === d.id).slice(0, 3);
-  const pods = PODS.filter(p => p.destId === d.id).slice(0, 2);
-  const guides = GUIDES.filter(g => g.destId === d.id).slice(0, 2);
   const safetyColor = d.safetyLevel === "good" ? t.success : t.warning;
-
-  const aiQs = [`Is ${d.name} safe this week?`, `Best vegetarian food in ${d.name}?`, `5-day ${d.name} itinerary?`];
-  const aiAns: Record<string, string> = {
-    [aiQs[0]]: `Community reports rate ${d.name} as "${d.safety}". ${d.exploring} travellers are exploring right now.`,
-    [aiQs[1]]: `Travellers most-verify ${rests[0]?.name || "local kitchens"} here. Open PureFind for the full list.`,
-    [aiQs[2]]: `A relaxed 5-day plan blends highlights with hidden gems. Open Plan to generate a day-by-day itinerary.`,
-  };
 
   const loadingBar = loading ? (
     <div style={{ height: 3, background: `linear-gradient(90deg,${t.accent},${t.secondary})`, animation: "none", transition: "opacity 0.3s" }} />
@@ -146,16 +212,15 @@ export function DestinationHub({ t, destId, openPods, openPureFind }: { t: Theme
           </button>
         </div>
         <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "0 16px 18px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "rgba(255,255,255,0.94)", borderRadius: 8, padding: "4px 10px", fontSize: 12, fontWeight: 800, color: "#1B263B" }}>
-              <Icon name="ShieldCheck" size={13} color="#3E7D5A" /> TrustScore {d.trust}
-            </span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, background: safetyColor, borderRadius: 8, padding: "4px 10px", fontSize: 12, fontWeight: 700, color: "#fff" }}>
-              <Icon name="ShieldAlert" size={12} color="#fff" /> {d.safety}
-            </span>
-          </div>
+          {d.safety && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 5, background: safetyColor, borderRadius: 8, padding: "4px 10px", fontSize: 12, fontWeight: 700, color: "#fff" }}>
+                <Icon name="ShieldAlert" size={12} color="#fff" /> {d.safety}
+              </span>
+            </div>
+          )}
           <div style={{ color: "#fff", fontSize: 38, lineHeight: 1 }}>{d.name}</div>
-          <div style={{ color: "rgba(255,255,255,0.85)", fontSize: 13.5, marginTop: 4 }}>{d.country} · {d.tagline}</div>
+          <div style={{ color: "rgba(255,255,255,0.85)", fontSize: 13.5, marginTop: 4 }}>{d.country}{d.country && d.tagline ? " · " : ""}{d.tagline}</div>
           <div style={{ display: "flex", gap: 9, marginTop: 14 }}>
             <button onClick={() => setFollowing(f => !f)} style={{ flex: 1, padding: "11px", borderRadius: 10, border: "none", background: following ? "rgba(255,255,255,0.92)" : "#fff", color: "#1B263B", fontSize: 14, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
               <Icon name={following ? "Check" : "Plus"} size={16} color="#1B263B" /> {following ? "Following" : "Follow"}
@@ -168,90 +233,44 @@ export function DestinationHub({ t, destId, openPods, openPureFind }: { t: Theme
       </div>
 
       <div style={{ padding: "18px 16px 0" }}>
-        <div style={{ display: "flex", background: t.card, borderRadius: 16, border: `1px solid ${t.border}`, padding: "14px 0", marginBottom: 18, boxShadow: "0 1px 3px rgba(13,19,32,0.04)" }}>
-          {[["Users", d.exploring, "exploring"], ["Activity", d.updates, "this week"], ["Compass", d.guides, "guides"]].map(([ic, n, l], i) => (
-            <div key={l} style={{ flex: 1, textAlign: "center", borderRight: i < 2 ? `1px solid ${t.border}` : "none" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}><Icon name={ic as string} size={15} color={t.secondary} /><span style={{ fontSize: 20, color: t.heading }}>{n as number}</span></div>
-              <div style={{ fontSize: 10.5, color: t.muted, marginTop: 2, textTransform: "uppercase", letterSpacing: 0.5 }}>{l as string}</div>
-            </div>
-          ))}
-        </div>
-
-        <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginBottom: 8 }}>
-          {d.badges.map((b: string) => <CommBadge key={b} label={b} t={t} />)}
-        </div>
+        {d.badges.length > 0 && (
+          <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginBottom: 8 }}>
+            {d.badges.map((b: string) => <CommBadge key={b} label={b} t={t} />)}
+          </div>
+        )}
         <PoweredBy t={t} style={{ marginBottom: 22 }} />
 
-        <HubSection title={`Ask about ${d.name}`} t={t}>
-          <div style={{ background: `linear-gradient(135deg,${t.accent}12,${t.secondary}08)`, borderRadius: 16, border: `1px solid ${t.accent}20`, padding: 16 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-              <div style={{ width: 30, height: 30, borderRadius: 9, background: t.accent, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="Sparkles" size={16} color={t.goldFill} /></div>
-              <div style={{ fontSize: 14 }}>Tripsova AI · trained on traveller posts</div>
+        <HubSection title="Live Traveller Feed" t={t}>
+          {posts.length > 0 ? (
+            posts.map((p, i) => <PostCard key={p._apiId ?? p.id + "-" + i} post={p} t={t} />)
+          ) : (
+            <div style={{ background: t.card, borderRadius: 14, border: `1px solid ${t.border}`, padding: "20px 16px", textAlign: "center", fontSize: 13, color: t.muted }}>
+              No traveller updates here yet.
             </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
-              {aiQs.map(q => <button key={q} onClick={() => setAi(q)} style={{ padding: "7px 13px", borderRadius: 20, border: `1px solid ${ai === q ? t.accent : t.border}`, background: ai === q ? t.accent + "15" : t.card, color: ai === q ? t.accent : t.text, fontSize: 12.5, fontWeight: 600, cursor: "pointer", transition: "all 0.18s" }}>{q}</button>)}
-            </div>
-            {ai && <div style={{ marginTop: 12, background: t.card, borderRadius: 12, padding: "12px 14px", border: `1px solid ${t.border}`, fontSize: 13.5, color: t.text, lineHeight: 1.6 }}>{aiAns[ai]}</div>}
-          </div>
-        </HubSection>
-
-        <HubSection title="Live Traveller Feed" t={t} action="See all">
-          {posts.map((p, i) => <PostCard key={p.id + "-" + i} post={p} t={t} />)}
+          )}
         </HubSection>
 
         <HubSection title="PureFind · Verified Eats" t={t} action="Open PureFind" onAction={openPureFind}>
-          {rests.map((r, i) => (
-            <div key={r.id + "-" + i} onClick={openPureFind} style={{ background: t.card, borderRadius: 14, border: `1px solid ${t.border}`, padding: 12, marginBottom: 10, display: "flex", gap: 12, cursor: "pointer", boxShadow: "0 1px 3px rgba(13,19,32,0.04)" }}>
-              <div style={{ width: 54, height: 54, borderRadius: 12, background: r.gradient, flexShrink: 0 }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                  <div style={{ fontSize: 14.5, color: t.heading }}>{r.name}</div>
-                  <div style={{ fontSize: 12.5, fontWeight: 700, color: t.warning, display: "flex", alignItems: "center", gap: 3, flexShrink: 0 }}><Icon name="Star" size={11} color={t.warning} /> {r.rating}</div>
-                </div>
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 7 }}>
-                  {Object.entries(r.verifiedBy).slice(0, 2).map(([fid, c]) => <CommunityVerified key={fid} foodId={fid} count={c as number} t={t} />)}
-                </div>
-              </div>
-            </div>
-          ))}
-        </HubSection>
-
-        <HubSection title="TripPods Here" t={t} action="See all" onAction={openPods}>
-          {pods.map((p, i) => (
-            <div key={p.id + "-" + i} onClick={openPods} style={{ background: t.card, borderRadius: 14, border: `1px solid ${t.border}`, padding: 14, marginBottom: 10, cursor: "pointer", boxShadow: "0 1px 3px rgba(13,19,32,0.04)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-                <div>
-                  <div style={{ fontSize: 15, color: t.heading }}>{p.destination}</div>
-                  <div style={{ fontSize: 12, color: t.muted }}>{p.dates} · {p.budget}/person</div>
-                </div>
-                <CompatBadge pct={p.compatibility} t={t} />
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <Avatar initials={p.hostAvatar} size={26} t={t} />
-                <span style={{ fontSize: 12.5, color: t.text, fontWeight: 600 }}>{p.host}</span>
-                <TrustBadge score={p.score} t={t} />
-                <span style={{ marginLeft: "auto", fontSize: 11.5, color: p.spots <= 1 ? t.danger : t.success, fontWeight: 700 }}>{p.spots} spot{p.spots > 1 ? "s" : ""} left</span>
-              </div>
-            </div>
-          ))}
-        </HubSection>
-
-        <HubSection title="Trusted Local Guides" t={t}>
-          <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 6, scrollbarWidth: "none" }}>
-            {guides.map((g, i) => (
-              <div key={g.id + "-" + i} style={{ flexShrink: 0, width: 170, background: t.card, borderRadius: 14, border: `1px solid ${t.border}`, overflow: "hidden", boxShadow: "0 1px 3px rgba(13,19,32,0.04)" }}>
-                <div style={{ height: 74, background: g.gradient }} />
-                <div style={{ padding: 12 }}>
-                  <div style={{ fontSize: 14.5, color: t.heading }}>{g.name}</div>
-                  <div style={{ fontSize: 11.5, color: t.muted, marginBottom: 8 }}>{g.speciality}</div>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <TrustBadge score={g.score} t={t} />
-                    <span style={{ fontSize: 12.5, fontWeight: 700, color: t.accent }}>{g.price}</span>
+          {rests.length > 0 ? (
+            rests.map((r, i) => (
+              <div key={r.id + "-" + i} onClick={openPureFind} style={{ background: t.card, borderRadius: 14, border: `1px solid ${t.border}`, padding: 12, marginBottom: 10, display: "flex", gap: 12, cursor: "pointer", boxShadow: "0 1px 3px rgba(13,19,32,0.04)" }}>
+                <div style={{ width: 54, height: 54, borderRadius: 12, background: r.gradient, flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div style={{ fontSize: 14.5, color: t.heading }}>{r.name}</div>
+                    <div style={{ fontSize: 12.5, fontWeight: 700, color: t.warning, display: "flex", alignItems: "center", gap: 3, flexShrink: 0 }}><Icon name="Star" size={11} color={t.warning} /> {r.rating}</div>
+                  </div>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 7 }}>
+                    {Object.entries(r.verifiedBy).slice(0, 2).map(([fid, c]) => <CommunityVerified key={fid} foodId={fid} count={c as number} t={t} />)}
                   </div>
                 </div>
               </div>
-            ))}
-          </div>
+            ))
+          ) : (
+            <div style={{ background: t.card, borderRadius: 14, border: `1px solid ${t.border}`, padding: "20px 16px", textAlign: "center", fontSize: 13, color: t.muted }}>
+              No verified food spots here yet.
+            </div>
+          )}
         </HubSection>
       </div>
     </div>

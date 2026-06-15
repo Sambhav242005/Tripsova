@@ -2,10 +2,10 @@
 
 import React, { useState, useEffect, startTransition } from "react";
 import type { Theme } from "@/data";
-import { RESTAURANTS, ALL_FOOD_TYPES } from "@/data";
+import { ALL_FOOD_TYPES } from "@/data";
 import { getFI } from "@/data";
 import { Icon } from "../icon";
-import { SectionTitle } from "../primitives/index";
+import { SectionTitle, ScreenHeader } from "../primitives/index";
 import { PoweredBy } from "../badges/index";
 import { api } from "@/lib/api";
 import type { FoodPlaceResponse } from "@/lib/types";
@@ -92,7 +92,7 @@ export function PureFindScreen({ t }: { t: Theme }) {
     return () => { mounted = false; };
   }, [filters, retryKey]);
 
-  const displayPlaces = apiPlaces ? apiPlaces.map(apiToPlace) : RESTAURANTS;
+  const displayPlaces = apiPlaces ? apiPlaces.map(apiToPlace) : [];
 
   const filtered = displayPlaces.filter(r => {
     const ms = search === "" || r.name.toLowerCase().includes(search.toLowerCase()) || r.location.toLowerCase().includes(search.toLowerCase());
@@ -102,10 +102,9 @@ export function PureFindScreen({ t }: { t: Theme }) {
 
   return (
     <div style={{ padding: "0 16px 110px" }}>
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: 24, color: t.heading, lineHeight: 1.1 }}>Find food you can<br />actually eat.</div>
-        <PoweredBy t={t} style={{ marginTop: 8 }} />
-      </div>
+      <ScreenHeader t={t} eyebrow="Eat with confidence" title={<>Find food you can<br />actually eat.</>} subtitle="Diet-aware places, verified by fellow travellers — never ads.">
+        <PoweredBy t={t} style={{ marginTop: 10 }} />
+      </ScreenHeader>
 
       <div style={{ position: "relative", marginBottom: 14 }}>
         <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", display: "flex" }}><Icon name="Search" size={17} color={t.muted} /></span>
@@ -184,7 +183,7 @@ export function PureFindScreen({ t }: { t: Theme }) {
         </div>
       )}
 
-      {(!loading || apiPlaces !== null) && (
+      {(!loading || apiPlaces !== null) && !(error && apiPlaces === null) && (
         <>
           <div style={{ fontSize: 12, color: t.muted, marginBottom: 14 }}>{filtered.length} community-verified places</div>
 

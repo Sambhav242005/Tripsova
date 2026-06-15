@@ -46,6 +46,28 @@ export function SectionTitle({
   );
 }
 
+// Branded screen-level header: gold eyebrow + serif title + subtitle.
+// Used at the top of feature screens for a consistent editorial identity.
+export function ScreenHeader({
+  t, eyebrow, title, subtitle, children,
+}: {
+  t: Theme; eyebrow?: string; title: React.ReactNode; subtitle?: string; children?: React.ReactNode;
+}) {
+  return (
+    <div style={{ marginBottom: 18 }}>
+      {eyebrow && (
+        <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 7 }}>
+          <span style={{ width: 16, height: 2, borderRadius: 2, background: t.goldFill }} />
+          <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1.4, textTransform: "uppercase", color: t.secondary }}>{eyebrow}</span>
+        </div>
+      )}
+      <div style={{ fontFamily: "var(--font-dm-serif), Georgia, serif", fontSize: 26, color: t.heading, lineHeight: 1.12 }}>{title}</div>
+      {subtitle && <div style={{ fontSize: 13, color: t.muted, marginTop: 6, lineHeight: 1.45 }}>{subtitle}</div>}
+      {children}
+    </div>
+  );
+}
+
 export function Card({ children, t, style = {} }: { children: React.ReactNode; t: Theme; style?: React.CSSProperties }) {
   return (
     <div

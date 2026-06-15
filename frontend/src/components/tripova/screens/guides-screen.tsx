@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, startTransition } from "react";
 import type { Theme } from "@/data";
-import { GUIDES } from "@/data";
 import { Icon } from "../icon";
 import { TrustBadge } from "../badges/index";
 import { api } from "@/lib/api";
@@ -53,12 +52,10 @@ export function GuidesScreen({ t }: { t: Theme }) {
   const [places, setPlaces] = useState<PlaceResponse[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [useFallback, setUseFallback] = useState(false);
 
   const fetchGuides = () => {
     setLoading(true);
     setError(null);
-    setUseFallback(false);
     api.get<PaginatedList<PlaceResponse>>("/api/places?type=guide&per_page=20")
       .then(res => {
         startTransition(() => {
@@ -69,7 +66,6 @@ export function GuidesScreen({ t }: { t: Theme }) {
       .catch(err => {
         startTransition(() => {
           setError(err instanceof Error ? err.message : "Failed to load guides");
-          setUseFallback(true);
           setLoading(false);
         });
       });
@@ -77,10 +73,8 @@ export function GuidesScreen({ t }: { t: Theme }) {
 
   useEffect(() => { startTransition(() => fetchGuides()); }, []);
 
-  const fallbackGuides = GUIDES.map(g => ({ ...g, id: String(g.id) }));
-  const apiGuides = places ? places.map(mapPlaceToGuide) : [];
-  const guides = useFallback ? fallbackGuides : apiGuides;
-  const isEmpty = !loading && !useFallback && places !== null && places.length === 0;
+  const guides = places ? places.map(mapPlaceToGuide) : [];
+  const isEmpty = !loading && !error && places !== null && places.length === 0;
 
   return (
     <div style={{ padding: "0 16px 110px" }}>
@@ -108,7 +102,6 @@ export function GuidesScreen({ t }: { t: Theme }) {
             >
               Retry
             </button>
-            <span style={{ fontSize: 12, color: t.muted, lineHeight: "30px" }}>Showing sample guides below</span>
           </div>
         </div>
       )}
