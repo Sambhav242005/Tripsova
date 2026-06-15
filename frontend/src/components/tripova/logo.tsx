@@ -1,49 +1,24 @@
-// Tripsova brand mark — inline SVG, crisp at every size, no external image needed.
+import Image from "next/image";
+
+const LOGO_SRC = "/brand/tripsova-client-logo.png";
+
 export function LogoMark({ size = 32 }: { size?: number }) {
-  const s = size;
   return (
-    <svg
-      width={s}
-      height={s}
-      viewBox="0 0 32 32"
-      fill="none"
-      style={{ flexShrink: 0, display: "block", borderRadius: "50%" }}
-    >
-      {/* Navy disc */}
-      <circle cx="16" cy="16" r="16" fill="#1B263B" />
-      {/* Subtle inner glow */}
-      <circle cx="16" cy="16" r="14" fill="url(#g)" opacity="0.35" />
-      {/* Gold serif T */}
-      <text
-        x="16"
-        y="22.5"
-        textAnchor="middle"
-        fontFamily="Georgia, 'Times New Roman', serif"
-        fontSize="18"
-        fontWeight="700"
-        fill="#D4B483"
-        letterSpacing="0.5"
-      >
-        T
-      </text>
-      {/* Subtle arc — travel / orbit accent */}
-      <path
-        d="M6 20.5 Q10 26 16 26 Q22 26 26 20.5"
-        stroke="#D4B483"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-        fill="none"
-        opacity="0.5"
-      />
-      {/* Small dot on arc (airplane/waypoint) */}
-      <circle cx="22" cy="23.2" r="1.5" fill="#D4B483" opacity="0.6" />
-      <defs>
-        <radialGradient id="g" cx="0.4" cy="0.35" r="0.7">
-          <stop offset="0" stopColor="#D4B483" stopOpacity="0.3" />
-          <stop offset="1" stopColor="#D4B483" stopOpacity="0" />
-        </radialGradient>
-      </defs>
-    </svg>
+    <Image
+      src={LOGO_SRC}
+      width={size}
+      height={size}
+      alt=""
+      priority
+      style={{
+        width: size,
+        height: size,
+        borderRadius: "50%",
+        display: "block",
+        objectFit: "cover",
+        flexShrink: 0,
+      }}
+    />
   );
 }
 

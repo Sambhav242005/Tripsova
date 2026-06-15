@@ -10,7 +10,7 @@ Tripova is an India-first travel discovery platform built with a modular FastAPI
 Tripsova/
 ├── backend/                  # FastAPI Python backend
 ├── frontend/                 # Next.js frontend (fetches the live API)
-│   └── public/brand/          # Stable generated brand assets used by app chrome
+│   └── public/brand/          # Stable generated brand assets used by static icons
 ├── deploy/                   # Docker Compose, nginx, system packages, Pi deploy guide
 ├── docs/                     # Project docs (this file, USER_WORKFLOW, plans)
 └── tripova.jsx               # Legacy prototype, not referenced by any build
@@ -225,7 +225,7 @@ hardcoded demo data driving the UI. See `frontend/AGENTS.md` for the coding conv
 
 ```
 frontend/
-├── public/brand/              # Generated Tripsova logo mark used by UI and app icons
+├── public/brand/              # Supplied Tripsova logo image assets used by app chrome and icons
 └── src/
     ├── app/                  # Next.js routes (app shell, SSR content pages, robots/sitemap/manifest/icons)
     ├── lib/
@@ -238,7 +238,7 @@ frontend/
     │   ├── theme.ts          # LIGHT / DARK token objects (the `t` prop source)
     │   └── index.ts          # Re-exports (Theme type, etc.)
     └── components/tripova/
-        ├── logo.tsx          # Brand mark using public/brand/tripsova-mark.png plus native wordmark text
+        ├── logo.tsx          # Image-backed brand mark plus native wordmark text
         ├── icon.tsx          # lucide-react icon-by-name wrapper
         ├── app-shell.tsx     # Responsive shell (sidebar ≥1024px, bottom-nav on mobile), tab routing
         ├── primitives/index.tsx # Shared UI: ScreenHeader, SectionTitle, Card, Btn, InputF, SkeletonCard…

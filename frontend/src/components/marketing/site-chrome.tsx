@@ -47,10 +47,10 @@ export function SiteHeader() {
       >
         <Link
           href="/"
-          style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}
+          style={{ display: "flex", alignItems: "center", gap: 12, textDecoration: "none" }}
         >
-          <LogoMark size={32} />
-          <span style={{ fontWeight: 800, fontSize: 19, color: C.navy, letterSpacing: 0.2 }}>
+          <LogoMark size={44} />
+          <span style={{ fontWeight: 800, fontSize: 22, color: C.navy, letterSpacing: 0.2 }}>
             Tripsova
           </span>
         </Link>
@@ -137,7 +137,7 @@ export function SiteFooter() {
       >
         <div style={{ maxWidth: 300 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-            <LogoMark size={34} />
+            <LogoMark size={44} />
             <span style={{ fontWeight: 800, fontSize: 20 }}>Tripsova</span>
           </div>
           <p style={{ fontSize: 14, lineHeight: 1.6, opacity: 0.75, margin: 0 }}>
