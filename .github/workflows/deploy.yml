@@ -104,7 +104,11 @@ jobs:
           fi
 
           git -C "$DEPLOY_DIR" fetch --force origin master
-          git -C "$DEPLOY_DIR" checkout -B master "$GITHUB_SHA"
+          # -f forces the branch switch and discards any local modifications in
+          # the working tree (e.g. files hand-edited on the Pi during live
+          # debugging). Without it, `checkout` aborts with "local changes would
+          # be overwritten" before `reset --hard` ever runs, breaking the deploy.
+          git -C "$DEPLOY_DIR" checkout -f -B master "$GITHUB_SHA"
           git -C "$DEPLOY_DIR" reset --hard "$GITHUB_SHA"
           git -C "$DEPLOY_DIR" clean -fdx
 
