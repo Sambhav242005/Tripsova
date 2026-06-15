@@ -32,6 +32,10 @@ test-results/
 *.swo
 *~
 
+# Agent / local tooling (keep local, never commit)
+.claude/
+.remember/
+
 # OS
 .DS_Store
 Thumbs.db
