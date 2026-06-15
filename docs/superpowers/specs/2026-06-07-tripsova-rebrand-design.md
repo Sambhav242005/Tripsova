@@ -91,6 +91,14 @@ Palette: Midnight Navy `#1B263B` · Dusty Blue `#6C8BA7` · Champagne Gold `#D4B
 - **Recreated as SVG, not the JPEG** (raster has a navy background, won't scale/theme).
 - Generate branded `app/icon.png`, `app/apple-icon.png`, favicon from the mark.
 
+> **Update (2026-06-15) — shipped logo supersedes the teardrop concept above.**
+> Per later client feedback the mark was redesigned and is now the implemented version:
+> a **navy circular disc** with a **gold serif "T"**, an **airplane with a dotted/dashed
+> swoosh orbit**, and the **TRIPSOVA** serif wordmark. The component API is unchanged
+> (`LogoMark({ size })` + `Logo({ size, showTagline, color, taglineColor })` in
+> `src/components/tripova/logo.tsx`); only the visual was reworked. The teardrop/mountain/moon
+> description above is the original concept and is kept for history.
+
 ---
 
 ## 5. Copy / metadata

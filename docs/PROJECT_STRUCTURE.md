@@ -215,6 +215,50 @@ From `scripts/seed.py`:
 
 ---
 
+## Frontend Structure
+
+The frontend is a Next.js app that fetches the **live backend API** — there is no
+hardcoded demo data driving the UI. See `frontend/AGENTS.md` for the coding conventions.
+
+```
+frontend/src/
+├── app/                      # Next.js routes (app shell, SSR content pages, robots/sitemap/manifest/icons)
+├── lib/
+│   ├── api.ts                # Client-side API helper (api.get/api.post)
+│   ├── server-api.ts         # Server-side fetch helper for SSR pages
+│   ├── destinations.ts       # useDestinations(limit?) hook → { destinations, loading, error, reload }
+│   ├── types.ts              # API response types (FeedPostResponse, FoodPlaceResponse, TripPodResponse, …)
+│   └── utils.ts              # Shared helpers
+├── data/                     # Theme tokens + small static config ONLY (no demo content)
+│   ├── theme.ts              # LIGHT / DARK token objects (the `t` prop source)
+│   └── index.ts              # Re-exports (Theme type, etc.)
+└── components/tripova/
+    ├── logo.tsx              # Brand mark: navy disc, gold serif "T", airplane swoosh, TRIPSOVA wordmark
+    ├── icon.tsx              # lucide-react icon-by-name wrapper
+    ├── app-shell.tsx         # Responsive shell (sidebar ≥1024px, bottom-nav on mobile), tab routing
+    ├── primitives/index.tsx  # Shared UI: ScreenHeader, SectionTitle, Card, Btn, InputF, SkeletonCard…
+    └── screens/              # One file per surface (home, discover, pods, purefind, plan, profile, …)
+```
+
+### Styling model
+All `components/tripova/**` UI is styled with **inline `style={{}}` objects** that read
+colours from a single theme object `t` (`LIGHT`/`DARK` in `data/theme.ts`) threaded down as a
+prop. No CSS modules / Tailwind on these screens. shadcn `ui/` primitives read CSS variables
+from `app/globals.css`. Serif type uses `var(--font-dm-serif)`.
+
+### Home feed order
+The home screen renders four sections in this client-specified order:
+**CityFeed → Trip Pulse → TripPod → PureFind**. Each section fetches its own live data
+(`/api/feed`, `/api/destinations`, `/api/trippods`, `/api/food`) and self-hides or shows an
+honest empty/error state when there is no data.
+
+### Data rule
+No demo / fabricated arrays drive screens. Destinations flow through the `useDestinations`
+hook; other surfaces call `api.get`/`api.post` directly. Every screen handles loading, error
+(with retry), and empty states explicitly.
+
+---
+
 ## Known Issues & Problems
 
 Last verified against the working tree on 2026-06-11. Items confirmed fixed have moved to the Resolved section below.

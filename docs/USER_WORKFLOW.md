@@ -133,7 +133,7 @@ On screen the traveller sees:
 |----------|-------|--------------|
 | Find **verified places & food** | **PureFind** / Discover | Diet-aware, **trust-ranked** results (not ads). Public pages: `/destinations/[slug]`, `/food/[slug]`. |
 | Find **travel companions** | **TripPods** | Match with verified travellers heading the same way. |
-| See **live ground truth** | **Home feed** | Real traveller updates (safety, crowd, weather, price, food); mark **Helpful** or **Report**. |
+| See **live ground truth** | **Home feed** | Four live sections — **CityFeed** (real traveller updates: safety, crowd, weather, price, food; mark **Helpful** or **Report**) → **Trip Pulse** (trending destinations) → **TripPod** (companions heading your way) → **PureFind** (diet-aware food). |
 | **Save / travel offline** | Offline pack | Download the trip so it works with no signal. |
 | **Contribute** | **Create** | Post an update, verify a place's diet status, build trust. |
 
