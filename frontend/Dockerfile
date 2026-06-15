@@ -35,5 +35,10 @@ USER nextjs
 EXPOSE 5173
 
 ENV PORT=5173
+# Next.js standalone server binds to process.env.HOSTNAME (falling back to
+# 0.0.0.0). Docker sets HOSTNAME to the container ID, so without this the server
+# tries to listen on an unresolvable name and crash-loops with
+# getaddrinfo EAI_AGAIN. Pin it to 0.0.0.0 to bind all interfaces.
+ENV HOSTNAME=0.0.0.0
 
 CMD ["node", "server.js"]

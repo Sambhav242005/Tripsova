@@ -140,6 +140,20 @@ jobs:
           fi
           chmod 600 "$ENV_FILE"
 
+      - name: Retire legacy compose project
+        shell: bash
+        working-directory: ${{ env.DEPLOY_DIR }}
+        run: |
+          set -euo pipefail
+          # Earlier deploys ran compose without --project-name, so it adopted the
+          # directory-derived default name "deploy". That stack binds the exact
+          # ports the canonical "tripsova" project needs (80/443/5174), and
+          # --remove-orphans only cleans within the SAME project — so a stale
+          # "deploy" stack would block every deploy. Tear it down if present.
+          if sudo docker ps -a --format '{{.Names}}' | grep -q '^deploy-'; then
+            sudo docker compose --env-file "$ENV_FILE" -f deploy/docker-compose.yml --project-name deploy down --remove-orphans || true
+          fi
+
       - name: Build and restart Docker stack
         shell: bash
         working-directory: ${{ env.DEPLOY_DIR }}
