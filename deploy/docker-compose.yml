@@ -41,7 +41,12 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 20s
+      # Cold start on a fresh pgdata volume waits for Postgres, retries the first
+      # connection, then runs Alembic migrations before uvicorn serves /health.
+      # Give that a realistic window; start_interval probes often so compose
+      # flips to healthy quickly once it's actually up (not on the 30s interval).
+      start_period: 120s
+      start_interval: 5s
     depends_on:
       db:
         condition: service_healthy
