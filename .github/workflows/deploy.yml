@@ -200,6 +200,7 @@ jobs:
           set -euo pipefail
           for attempt in {1..30}; do
             if curl -fsS http://127.0.0.1:80/ >/dev/null \
+              && curl -fsS http://127.0.0.1:80/brand/tripsova-client-logo.png >/dev/null \
               && curl -fsS http://127.0.0.1:80/api/destinations >/dev/null; then
               break
             fi
@@ -207,5 +208,6 @@ jobs:
           done
 
           curl -fsS http://127.0.0.1:80/ >/dev/null
+          curl -fsS http://127.0.0.1:80/brand/tripsova-client-logo.png >/dev/null
           curl -fsS http://127.0.0.1:80/api/destinations >/dev/null
           sudo docker compose --env-file "$ENV_FILE" -f deploy/docker-compose.yml --project-name tripsova ps

@@ -10,6 +10,7 @@ export function LogoMark({ size = 32 }: { size?: number }) {
       height={size}
       alt=""
       priority
+      unoptimized
       style={{
         width: size,
         height: size,
