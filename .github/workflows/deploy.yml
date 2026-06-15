@@ -64,10 +64,18 @@ jobs:
     if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
 
     env:
-      DEPLOY_DIR: /home/${{ secrets.PI_USER || 'pi' }}/Tripsova
       REPO_URL: https://github.com/${{ github.repository }}.git
 
     steps:
+      - name: Resolve deploy paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          # No GitHub secrets needed: derive everything from the Pi runner's own
+          # home directory. The runner user owns these paths.
+          echo "DEPLOY_DIR=$HOME/Tripsova" >> "$GITHUB_ENV"
+          echo "ENV_FILE=$HOME/.tripsova/deploy.env" >> "$GITHUB_ENV"
+
       - name: Check out tested commit
         uses: actions/checkout@v6
         with:
@@ -114,14 +122,29 @@ jobs:
             sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y "${packages[@]}"
           fi
 
+      - name: Ensure deployment secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Generate a persistent JWT secret on first deploy and reuse it forever.
+          # Lives outside DEPLOY_DIR so `git clean -fdx` can't wipe it. No GitHub
+          # secret required — the Pi owns its own secret.
+          mkdir -p "$(dirname "$ENV_FILE")"
+          if ! grep -q '^JWT_SECRET=' "$ENV_FILE" 2>/dev/null; then
+            umask 077
+            echo "JWT_SECRET=$(openssl rand -hex 32)" >> "$ENV_FILE"
+          fi
+          chmod 600 "$ENV_FILE"
+
       - name: Build and restart Docker stack
         shell: bash
         working-directory: ${{ env.DEPLOY_DIR }}
         run: |
           set -euo pipefail
-          export JWT_SECRET="${{ secrets.JWT_SECRET }}"
-          sudo docker compose -f deploy/docker-compose.yml --project-name tripsova up -d --build --remove-orphans
-          sudo docker compose -f deploy/docker-compose.yml --project-name tripsova ps
+          # --env-file feeds JWT_SECRET into compose interpolation. Works under
+          # sudo without -E (no reliance on environment passthrough).
+          sudo docker compose --env-file "$ENV_FILE" -f deploy/docker-compose.yml --project-name tripsova up -d --build --remove-orphans
+          sudo docker compose --env-file "$ENV_FILE" -f deploy/docker-compose.yml --project-name tripsova ps
 
       - name: Verify deployed Docker stack
         shell: bash
