@@ -74,7 +74,7 @@ const orgJsonLd = {
   slogan: "Discover through people.",
   description:
     "India-first, globally scalable travel and community app for traveller-verified trips, food, and companions.",
-  logo: `${SITE_URL}/icon.svg`,
+  logo: `${SITE_URL}/icon.png`,
 };
 
 export default function RootLayout({
