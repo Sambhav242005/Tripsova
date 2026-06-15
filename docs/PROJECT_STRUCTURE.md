@@ -10,7 +10,7 @@ Tripova is an India-first travel discovery platform built with a modular FastAPI
 Tripsova/
 ├── backend/                  # FastAPI Python backend
 ├── frontend/                 # Next.js frontend (fetches the live API)
-├── deploy/                   # docker-compose, nginx.conf, system packages
+├── deploy/                   # Docker Compose, nginx, system packages, Pi deploy guide
 ├── docs/                     # Project docs (this file, USER_WORKFLOW, plans)
 └── tripova.jsx               # Legacy prototype, not referenced by any build
 ```

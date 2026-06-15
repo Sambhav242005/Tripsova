@@ -103,12 +103,12 @@ jobs:
             git clone "$REPO_URL" "$DEPLOY_DIR"
           fi
 
-          git -C "$DEPLOY_DIR" fetch --force origin master
+          git -C "$DEPLOY_DIR" fetch --force origin "$GITHUB_REF_NAME"
           # -f forces the branch switch and discards any local modifications in
           # the working tree (e.g. files hand-edited on the Pi during live
           # debugging). Without it, `checkout` aborts with "local changes would
           # be overwritten" before `reset --hard` ever runs, breaking the deploy.
-          git -C "$DEPLOY_DIR" checkout -f -B master "$GITHUB_SHA"
+          git -C "$DEPLOY_DIR" checkout -f -B "$GITHUB_REF_NAME" "$GITHUB_SHA"
           git -C "$DEPLOY_DIR" reset --hard "$GITHUB_SHA"
           git -C "$DEPLOY_DIR" clean -fdx
 
@@ -158,6 +158,31 @@ jobs:
             sudo docker compose --env-file "$ENV_FILE" -f deploy/docker-compose.yml --project-name deploy down --remove-orphans || true
           fi
 
+      - name: Retire stale Tripova containers
+        shell: bash
+        working-directory: ${{ env.DEPLOY_DIR }}
+        run: |
+          set -euo pipefail
+          # Old manual/partial compose runs can leave containers with canonical
+          # names but incomplete compose labels. `up` then cannot create the
+          # replacement container and exits with a name conflict. Remove only
+          # containers that are not attached to this compose file.
+          compose_file="$DEPLOY_DIR/deploy/docker-compose.yml"
+
+          for container in tripsova-db-1 tripsova-backend-1 tripsova-frontend-1 tripsova-nginx-1; do
+            if ! sudo docker container inspect "$container" >/dev/null 2>&1; then
+              continue
+            fi
+
+            project="$(sudo docker inspect -f '{{ index .Config.Labels "com.docker.compose.project" }}' "$container" 2>/dev/null || true)"
+            config_files="$(sudo docker inspect -f '{{ index .Config.Labels "com.docker.compose.project.config_files" }}' "$container" 2>/dev/null || true)"
+            config_hash="$(sudo docker inspect -f '{{ index .Config.Labels "com.docker.compose.config-hash" }}' "$container" 2>/dev/null || true)"
+
+            if [ "$project" != "tripsova" ] || [ "$config_files" != "$compose_file" ] || [ -z "$config_hash" ] || [ "$config_hash" = "<no value>" ]; then
+              sudo docker rm -f "$container"
+            fi
+          done
+
       - name: Build and restart Docker stack
         shell: bash
         working-directory: ${{ env.DEPLOY_DIR }}
@@ -174,11 +199,13 @@ jobs:
         run: |
           set -euo pipefail
           for attempt in {1..30}; do
-            if curl -fsS http://127.0.0.1:80/ >/dev/null; then
+            if curl -fsS http://127.0.0.1:80/ >/dev/null \
+              && curl -fsS http://127.0.0.1:80/api/destinations >/dev/null; then
               break
             fi
             sleep 2
           done
 
           curl -fsS http://127.0.0.1:80/ >/dev/null
-          sudo docker compose -f deploy/docker-compose.yml --project-name tripsova ps
+          curl -fsS http://127.0.0.1:80/api/destinations >/dev/null
+          sudo docker compose --env-file "$ENV_FILE" -f deploy/docker-compose.yml --project-name tripsova ps

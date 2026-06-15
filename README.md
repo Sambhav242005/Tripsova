@@ -89,6 +89,7 @@ docker compose -f deploy/docker-compose.yml up --build
 - [Project Structure & Known Issues](docs/PROJECT_STRUCTURE.md)
 - [Agent Guide](AGENTS.md)
 - [Backend README](backend/README.md)
+- [Raspberry Pi Deployment](deploy/README.md)
 
 ## License
 
