@@ -399,12 +399,12 @@ export interface OfflinePackDownloadResponse {
 
 // --- TripPods ---
 export interface TripPodCreate {
-  destination_id: string;
+  destination_id?: string;
   title: string;
-  start_date: string;
+  start_date?: string;
   end_date?: string;
   budget?: number;
-  travel_style?: string[];
+  travel_style?: string[] | Record<string, unknown>;
   max_members?: number;
   gender_preference?: string;
   verification_required?: boolean;
@@ -418,7 +418,7 @@ export interface TripPodResponse {
   start_date?: string;
   end_date?: string;
   budget?: number;
-  travel_style?: Record<string, unknown>;
+  travel_style?: string[] | Record<string, unknown>;
   max_members?: number;
   gender_preference?: string;
   verification_required?: boolean;

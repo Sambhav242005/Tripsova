@@ -107,7 +107,7 @@ export function PureFindScreen({ t }: { t: Theme }) {
 
       <div style={{ position: "relative", marginBottom: 14 }}>
         <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", display: "flex" }}><Icon name="Search" size={17} color={t.muted} /></span>
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search restaurant or city..." style={{ width: "100%", padding: "12px 16px 12px 42px", borderRadius: 12, border: `1px solid ${t.border}`, background: t.card, color: t.text, fontSize: 14, outline: "none", boxSizing: "border-box" }} />
+        <input aria-label="Search restaurants or cities" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search restaurant or city..." style={{ width: "100%", padding: "12px 16px 12px 42px", borderRadius: 12, border: `1px solid ${t.border}`, background: t.card, color: t.text, fontSize: 14, outline: "2px solid transparent", outlineOffset: 2, boxSizing: "border-box" }} />
       </div>
 
       <div style={{ background: t.card, borderRadius: 14, padding: "13px 14px", marginBottom: 18, border: `1px solid ${t.border}`, display: "flex", flexDirection: "column", gap: 12, alignItems: "stretch", boxShadow: "0 1px 3px rgba(13,19,32,0.04)" }}>
@@ -144,7 +144,7 @@ export function PureFindScreen({ t }: { t: Theme }) {
                 border: `1.5px solid ${active ? f.color : t.border}`,
                 background: active ? f.color + "15" : t.tag,
                 color: active ? f.color : t.muted, fontSize: 12, fontWeight: active ? 700 : 500,
-                cursor: "pointer", transition: "all 0.18s",
+                cursor: "pointer", transition: "background 0.18s, border-color 0.18s, color 0.18s",
               }}
             >
               {f.emoji} {f.label} {active && <Icon name="Check" size={12} color={f.color} />}

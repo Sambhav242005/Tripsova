@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import type { Theme } from "@/data";
 import { Card, Btn } from "../primitives/index";
 import { Icon } from "../icon";
@@ -31,31 +31,63 @@ const TRANSPORT_META: Record<TransportKey, { label: string; icon: string }> = {
 
 const inr = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
 
-export function JourneyScreen({ t }: { t: Theme }) {
-  const [origin, setOrigin] = useState("");
-  const [destination, setDestination] = useState("");
+const controlTags = new Set(["input", "textarea", "select"]);
+
+export interface JourneySeed {
+  key: string;
+  origin: string;
+  destination: string;
+  people?: number;
+  budget?: number;
+  departure?: string;
+  autoPlan?: boolean;
+}
+
+interface JourneyValues {
+  origin: string;
+  destination: string;
+  roundTrip: boolean;
+  people: number;
+  budget: string;
+  departure: string;
+}
+
+const autoPlannedSeedKeys = new Set<string>();
+
+export function JourneyScreen({ t, seed }: { t: Theme; seed?: JourneySeed | null }) {
+  const [origin, setOrigin] = useState(() => seed?.origin ?? "");
+  const [destination, setDestination] = useState(() => seed?.destination ?? "");
   const [roundTrip, setRoundTrip] = useState(true);
-  const [people, setPeople] = useState(1);
-  const [budget, setBudget] = useState("");
-  const [departure, setDeparture] = useState("");
+  const [people, setPeople] = useState(() => Math.max(1, seed?.people || 1));
+  const [budget, setBudget] = useState(() => (typeof seed?.budget === "number" ? String(seed.budget) : ""));
+  const [departure, setDeparture] = useState(() => seed?.departure || "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<JourneyPlanResponse | null>(null);
 
-  const planJourney = async () => {
+  const planJourneyWith = useCallback(async (values?: Partial<JourneyValues>) => {
+    const current: JourneyValues = {
+      origin,
+      destination,
+      roundTrip,
+      people,
+      budget,
+      departure,
+      ...values,
+    };
     setError(null);
-    if (!origin.trim() || !destination.trim()) {
+    if (!current.origin.trim() || !current.destination.trim()) {
       setError("Tell us where you're starting and where you're going.");
       return;
     }
     const body: JourneyPlanRequest = {
-      origin: origin.trim(),
-      destination: destination.trim(),
-      roundTrip,
-      peopleCount: Math.max(1, people),
+      origin: current.origin.trim(),
+      destination: current.destination.trim(),
+      roundTrip: current.roundTrip,
+      peopleCount: Math.max(1, current.people),
     };
-    if (budget.trim()) body.budget = Number(budget);
-    if (departure) body.departureTime = new Date(departure).toISOString();
+    if (current.budget.trim()) body.budget = Number(current.budget);
+    if (current.departure) body.departureTime = new Date(current.departure).toISOString();
 
     setLoading(true);
     setResult(null);
@@ -71,7 +103,31 @@ export function JourneyScreen({ t }: { t: Theme }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [budget, departure, destination, origin, people, roundTrip]);
+
+  const planJourney = () => planJourneyWith();
+
+  useEffect(() => {
+    if (!seed) return;
+    const nextBudget = typeof seed.budget === "number" ? String(seed.budget) : "";
+    const nextPeople = Math.max(1, seed.people || 1);
+    if (seed.autoPlan && !autoPlannedSeedKeys.has(seed.key)) {
+      const timer = window.setTimeout(() => {
+        if (autoPlannedSeedKeys.has(seed.key)) return;
+        autoPlannedSeedKeys.add(seed.key);
+        void planJourneyWith({
+          origin: seed.origin,
+          destination: seed.destination,
+          roundTrip: true,
+          people: nextPeople,
+          budget: nextBudget,
+          departure: seed.departure || "",
+        });
+      }, 0);
+      return () => window.clearTimeout(timer);
+    }
+    return undefined;
+  }, [planJourneyWith, seed]);
 
   return (
     <div style={{ padding: "0 16px 16px" }}>
@@ -308,10 +364,24 @@ function GeoNote({ result, t }: { result: JourneyPlanResponse; t: Theme }) {
 }
 
 function Field({ label, children, t }: { label: string; children: React.ReactNode; t: Theme }) {
+  const generatedId = React.useId();
+  const onlyChild = React.Children.count(children) === 1 ? React.Children.only(children) : null;
+  const isControl =
+    React.isValidElement(onlyChild) &&
+    typeof onlyChild.type === "string" &&
+    controlTags.has(onlyChild.type);
+  const controlId = isControl ? ((onlyChild.props as { id?: string }).id ?? generatedId) : undefined;
+
   return (
     <div>
-      <div style={{ fontSize: 11, fontWeight: 700, color: t.muted, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 7 }}>{label}</div>
-      {children}
+      {controlId ? (
+        <label htmlFor={controlId} style={{ display: "block", fontSize: 11, fontWeight: 700, color: t.muted, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 7 }}>{label}</label>
+      ) : (
+        <div style={{ fontSize: 11, fontWeight: 700, color: t.muted, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 7 }}>{label}</div>
+      )}
+      {isControl
+        ? React.cloneElement(onlyChild as React.ReactElement<Record<string, unknown>>, { id: controlId })
+        : children}
     </div>
   );
 }
@@ -329,6 +399,6 @@ function inputStyle(t: Theme, filled: boolean): React.CSSProperties {
   return {
     width: "100%", padding: "12px 14px", borderRadius: 12,
     border: `1.5px solid ${filled ? t.accent : t.border}`,
-    background: t.card, color: t.text, fontSize: 14, outline: "none", boxSizing: "border-box",
+    background: t.card, color: t.text, fontSize: 14, boxSizing: "border-box",
   };
 }

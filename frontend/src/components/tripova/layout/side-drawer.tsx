@@ -64,19 +64,21 @@ export function SideDrawer() {
     </button>
   );
 
+  if (!drawerOpen) return null;
+
   return (
-    <div style={{ position: "fixed", top: 0, bottom: 0, left: 0, width: "100%", zIndex: 200, pointerEvents: drawerOpen ? "auto" : "none" }}>
-      <div onClick={() => setDrawerOpen(false)} style={{ position: "absolute", inset: 0, background: "rgba(13,19,32,0.5)", backdropFilter: drawerOpen ? "blur(2px)" : "none", opacity: drawerOpen ? 1 : 0, transition: "opacity 0.28s" }} />
+    <div style={{ position: "fixed", top: 0, bottom: 0, left: 0, width: "100%", zIndex: 200, pointerEvents: "auto" }}>
+      <div onClick={() => setDrawerOpen(false)} style={{ position: "absolute", inset: 0, background: "rgba(13,19,32,0.5)", backdropFilter: "blur(2px)", opacity: 1, transition: "opacity 0.28s" }} />
       <div style={{
         position: "absolute", top: 0, left: 0, bottom: 0, width: 300, maxWidth: "82%",
         background: t.bg, borderRight: `1px solid ${t.border}`,
         boxShadow: "8px 0 40px rgba(13,19,32,0.28)",
-        transform: drawerOpen ? "translateX(0)" : "translateX(-104%)",
+        transform: "translateX(0)",
         transition: "transform 0.32s cubic-bezier(0.4,0,0.2,1)",
         display: "flex", flexDirection: "column", overflowY: "auto",
       }}>
         <div style={{ padding: "22px 18px 18px", background: `linear-gradient(135deg,${t.accent},${t.secondary})`, position: "relative" }}>
-          <button onClick={() => setDrawerOpen(false)} style={{ position: "absolute", top: 14, right: 14, width: 32, height: 32, borderRadius: "50%", border: "none", background: "rgba(255,255,255,0.18)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <button onClick={() => setDrawerOpen(false)} aria-label="Close menu" style={{ position: "absolute", top: 14, right: 14, width: 44, height: 44, borderRadius: "50%", border: "none", background: "rgba(255,255,255,0.18)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <Icon name="X" size={17} color="#fff" />
           </button>
           <div style={{ width: 54, height: 54, borderRadius: "50%", background: "rgba(255,255,255,0.92)", display: "flex", alignItems: "center", justifyContent: "center", color: t.accent, fontSize: 19, fontWeight: 800, marginBottom: 11 }}>{getInitials(user?.name)}</div>

@@ -1,16 +1,16 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID
 from datetime import datetime
 
 
 class TripPodCreate(BaseModel):
-    destination_id: UUID
+    destination_id: Optional[UUID] = None
     title: str
-    start_date: datetime
+    start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
     budget: Optional[float] = None
-    travel_style: Optional[list] = None
+    travel_style: Optional[list[str] | dict[str, Any]] = None
     max_members: Optional[int] = None
     gender_preference: Optional[str] = None
     verification_required: Optional[bool] = None
@@ -24,7 +24,7 @@ class TripPodResponse(BaseModel):
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
     budget: Optional[float] = None
-    travel_style: Optional[dict] = None
+    travel_style: Optional[list[str] | dict[str, Any]] = None
     max_members: Optional[int] = None
     gender_preference: Optional[str] = None
     verification_required: Optional[bool] = None

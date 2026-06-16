@@ -80,9 +80,11 @@ async def save_route(db: AsyncSession, user_id: str, data: dict, plan: dict) -> 
 
 
 async def get_user_trips(db: AsyncSession, user_id: str) -> list[Trip]:
+    # `sub` from the JWT is a str; the UUID column wants a UUID on SQLite (Postgres coerces).
+    uid = user_id if isinstance(user_id, uuid.UUID) else uuid.UUID(str(user_id))
     result = await db.execute(
         select(Trip)
-        .where(Trip.user_id == user_id)
+        .where(Trip.user_id == uid)
         .order_by(Trip.created_at.desc())
     )
     return result.scalars().all()

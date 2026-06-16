@@ -184,6 +184,7 @@ tests/
 ├── test_request_logging.py
 ├── test_sentiment.py
 ├── test_trip_planner.py
+├── test_trippods.py
 └── test_users.py
 ```
 

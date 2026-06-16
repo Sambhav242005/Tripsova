@@ -26,20 +26,74 @@ interface CreateSheetProps {
   onCreatePod: (pod: TripPodResponse) => void;
 }
 
-const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
-  <div style={{ marginBottom: 14 }}>
-    <div style={{ fontSize: 11, fontWeight: 700, color: "inherit", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 7 }}>
-      {label}
+const controlTags = new Set(["input", "textarea", "select"]);
+
+const Field = ({ label, children }: { label: string; children: React.ReactNode }) => {
+  const generatedId = React.useId();
+  const onlyChild = React.Children.count(children) === 1 ? React.Children.only(children) : null;
+  const isControl =
+    React.isValidElement(onlyChild) &&
+    typeof onlyChild.type === "string" &&
+    controlTags.has(onlyChild.type);
+  const controlId = isControl ? ((onlyChild.props as { id?: string }).id ?? generatedId) : undefined;
+
+  return (
+    <div style={{ marginBottom: 14 }}>
+      {controlId ? (
+        <label htmlFor={controlId} style={{ display: "block", fontSize: 11, fontWeight: 700, color: "inherit", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 7 }}>
+          {label}
+        </label>
+      ) : (
+        <div style={{ fontSize: 11, fontWeight: 700, color: "inherit", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 7 }}>
+          {label}
+        </div>
+      )}
+      {isControl
+        ? React.cloneElement(onlyChild as React.ReactElement<Record<string, unknown>>, { id: controlId })
+        : children}
     </div>
-    {children}
-  </div>
-);
+  );
+};
 
 const inputStyle: React.CSSProperties = {
   width: "100%", padding: "11px 14px", borderRadius: 10,
   border: "1px solid var(--border, #E7E8EB)", background: "var(--tag, #F1F3F5)",
-  color: "var(--text, #262B33)", fontSize: 14, outline: "none", boxSizing: "border-box",
+  color: "var(--text, #262B33)", fontSize: 14, boxSizing: "border-box",
 };
+
+const TRIP_STYLE_OPTIONS = ["Flexible", "Food", "Culture", "Relaxed", "Adventure"];
+
+function toApiDate(value: string): string | undefined {
+  return value ? `${value}T00:00:00` : undefined;
+}
+
+function formatDateRange(start: string, end: string): string | undefined {
+  if (start && end) return `${start} to ${end}`;
+  if (start) return `${start} onwards`;
+  return undefined;
+}
+
+function formatSubmitError(e: unknown, fallback: string): string {
+  if (!(e instanceof ApiError)) return "Something went wrong";
+  if (typeof e.detail === "string") return e.detail;
+
+  const detail = e.detail && typeof e.detail === "object" ? (e.detail as { detail?: unknown }).detail : undefined;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map(item => {
+        if (!item || typeof item !== "object") return "";
+        const record = item as { loc?: unknown; msg?: unknown };
+        const field = Array.isArray(record.loc) ? record.loc.filter(part => part !== "body").join(".") : "";
+        const message = typeof record.msg === "string" ? record.msg : "";
+        return field && message ? `${field}: ${message}` : message;
+      })
+      .filter(Boolean);
+    if (messages.length > 0) return messages.join("; ");
+  }
+
+  return e.message && e.message !== "Request failed" ? e.message : fallback;
+}
 
 const Opt = ({ icon, label, desc, on, t }: { icon: string; label: string; desc: string; on: () => void; t: Theme }) => (
   <button
@@ -67,9 +121,13 @@ export function CreateSheet({ open, onClose, t, onCreatePost, onCreatePod }: Cre
   const [place, setPlace] = useState("");
   const [cat, setCat] = useState("Food");
   const [photos, setPhotos] = useState<string[]>([]);
+  const [podOrigin, setPodOrigin] = useState("");
   const [podDest, setPodDest] = useState("");
-  const [podDates, setPodDates] = useState("");
+  const [podStartDate, setPodStartDate] = useState("");
+  const [podEndDate, setPodEndDate] = useState("");
   const [podBudget, setPodBudget] = useState("");
+  const [podPeople, setPodPeople] = useState("4");
+  const [podStyle, setPodStyle] = useState("Flexible");
   const [done, setDone] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -77,7 +135,7 @@ export function CreateSheet({ open, onClose, t, onCreatePost, onCreatePod }: Cre
   const { user } = useAuth();
   const { destinations } = useDestinations();
 
-  const reset = () => { setMode(null); setText(""); setPlace(""); setCat("Food"); setPhotos([]); setPodDest(""); setPodDates(""); setPodBudget(""); setDone(false); setSubmitError(null); };
+  const reset = () => { setMode(null); setText(""); setPlace(""); setCat("Food"); setPhotos([]); setPodOrigin(""); setPodDest(""); setPodStartDate(""); setPodEndDate(""); setPodBudget(""); setPodPeople("4"); setPodStyle("Flexible"); setDone(false); setSubmitError(null); };
   const close = () => { reset(); onClose(); };
 
   const onFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -97,35 +155,90 @@ export function CreateSheet({ open, onClose, t, onCreatePost, onCreatePod }: Cre
       setDone(true);
       setTimeout(close, 1300);
     } catch (e) {
-      setSubmitError(e instanceof ApiError ? (typeof e.detail === 'string' ? e.detail : "Failed to create post") : "Something went wrong");
+      setSubmitError(formatSubmitError(e, "Failed to create post"));
     } finally {
       setSubmitting(false);
     }
   };
 
   const submitPod = async () => {
-    if (!podDest.trim()) return;
+    const destinationName = podDest.trim();
+    const originName = podOrigin.trim();
+    if (!destinationName || (mode === "trip" && !originName)) {
+      setSubmitError("Tell us your starting point and destination.");
+      return;
+    }
+    if (mode === "trip" && (!podStartDate || !podEndDate)) {
+      setSubmitError("Choose both a start date and final date.");
+      return;
+    }
+    if (podStartDate && podEndDate && new Date(podEndDate) < new Date(podStartDate)) {
+      setSubmitError("Final date should be after the start date.");
+      return;
+    }
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const destMatch = (destinations ?? []).find(d => podDest.toLowerCase().includes(d.name.toLowerCase()));
+      const lowerDestination = destinationName.toLowerCase();
+      const destMatch = (destinations ?? []).find(d => {
+        const lowerName = d.name.toLowerCase();
+        return lowerDestination === lowerName || lowerDestination.includes(lowerName) || lowerName.includes(lowerDestination);
+      });
+      const maxMembers = Math.max(1, Math.min(20, Number(podPeople) || 1));
       const body: TripPodCreate = {
-        destination_id: destMatch?.id || "",
-        title: podDest,
-        start_date: new Date().toISOString().split("T")[0],
-        budget: podBudget ? parseInt(podBudget) : undefined,
-        max_members: 5,
+        title: destinationName,
+        travel_style: {
+          origin: originName || undefined,
+          destination: destinationName,
+          dates: formatDateRange(podStartDate, podEndDate),
+          style: podStyle,
+          people: maxMembers,
+          note: text.trim() || undefined,
+          intent: mode === "trip" ? "start_trip" : "create_trippod",
+        },
+        max_members: maxMembers,
       };
+      if (destMatch?.id) body.destination_id = destMatch.id;
+      const startDate = toApiDate(podStartDate);
+      const endDate = toApiDate(podEndDate);
+      if (startDate) body.start_date = startDate;
+      if (endDate) body.end_date = endDate;
+      if (podBudget.trim()) body.budget = Number(podBudget);
       const result = await api.post<TripPodResponse>("/api/trippods", body);
       onCreatePod(result);
       setDone(true);
       setTimeout(close, 1300);
     } catch (e) {
-      setSubmitError(e instanceof ApiError ? (typeof e.detail === 'string' ? e.detail : "Failed to create pod") : "Something went wrong");
+      setSubmitError(formatSubmitError(e, "Failed to create pod"));
     } finally {
       setSubmitting(false);
     }
   };
+
+  const stylePicker = (
+    <Field label="Trip style">
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+        {TRIP_STYLE_OPTIONS.map(style => (
+          <button
+            key={style}
+            onClick={() => setPodStyle(style)}
+            style={{
+              padding: "7px 11px",
+              borderRadius: 8,
+              border: `1.5px solid ${podStyle === style ? t.accent : t.border}`,
+              background: podStyle === style ? t.accent + "12" : t.tag,
+              color: podStyle === style ? t.accent : t.muted,
+              fontSize: 12.5,
+              fontWeight: podStyle === style ? 700 : 500,
+              cursor: "pointer",
+            }}
+          >
+            {style}
+          </button>
+        ))}
+      </div>
+    </Field>
+  );
 
   const titles: Record<string, string> = { post: "Create Post", photos: "Upload Photos", trip: "Start a Trip", pod: "Create TripPod" };
 
@@ -224,12 +337,29 @@ export function CreateSheet({ open, onClose, t, onCreatePost, onCreatePod }: Cre
           </>
         ) : mode === "trip" ? (
           <>
+            <Field label="Starting point">
+              <input value={podOrigin} onChange={e => setPodOrigin(e.target.value)} placeholder="e.g. Indore" style={inputStyle} />
+            </Field>
             <Field label="Destination">
-              <input value={podDest} onChange={e => setPodDest(e.target.value)} placeholder="Where are you going?" style={inputStyle} />
+              <input value={podDest} onChange={e => setPodDest(e.target.value)} placeholder="e.g. Ratlam" style={inputStyle} />
             </Field>
-            <Field label="Dates">
-              <input value={podDates} onChange={e => setPodDates(e.target.value)} placeholder="e.g. 12–18 July" style={inputStyle} />
-            </Field>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <Field label="Start date">
+                <input value={podStartDate} onChange={e => setPodStartDate(e.target.value)} type="date" style={inputStyle} />
+              </Field>
+              <Field label="Final date">
+                <input value={podEndDate} onChange={e => setPodEndDate(e.target.value)} type="date" style={inputStyle} />
+              </Field>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <Field label="Travellers">
+                <input value={podPeople} onChange={e => setPodPeople(e.target.value)} type="number" min={1} max={20} placeholder="4" style={inputStyle} />
+              </Field>
+              <Field label="Budget INR">
+                <input value={podBudget} onChange={e => setPodBudget(e.target.value)} type="number" placeholder="12000" style={inputStyle} />
+              </Field>
+            </div>
+            {stylePicker}
             <Field label="A note (optional)">
               <textarea value={text} onChange={e => setText(e.target.value)} rows={3} placeholder="What's the plan?" style={{ ...inputStyle, resize: "none", lineHeight: 1.5 }} />
             </Field>
@@ -238,16 +368,22 @@ export function CreateSheet({ open, onClose, t, onCreatePost, onCreatePod }: Cre
                 <Icon name="AlertTriangle" size={14} color={t.danger} /> {submitError}
               </div>
             )}
-            <Btn onClick={submitPod} full t={t} disabled={!podDest.trim() || submitting}>{submitting ? "Creating…" : "Start trip & open a pod"}</Btn>
+            <Btn onClick={submitPod} full t={t} disabled={!podOrigin.trim() || !podDest.trim() || !podStartDate || !podEndDate || submitting}>{submitting ? "Creating…" : "Start trip & open a pod"}</Btn>
           </>
         ) : (
           <>
+            <Field label="Starting point (optional)">
+              <input value={podOrigin} onChange={e => setPodOrigin(e.target.value)} placeholder="e.g. Indore" style={inputStyle} />
+            </Field>
             <Field label="Destination">
               <input value={podDest} onChange={e => setPodDest(e.target.value)} placeholder="e.g. Spiti Valley" style={inputStyle} />
             </Field>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <Field label="Dates">
-                <input value={podDates} onChange={e => setPodDates(e.target.value)} placeholder="Oct 10–17" style={inputStyle} />
+              <Field label="Start date">
+                <input value={podStartDate} onChange={e => setPodStartDate(e.target.value)} type="date" style={inputStyle} />
+              </Field>
+              <Field label="Final date">
+                <input value={podEndDate} onChange={e => setPodEndDate(e.target.value)} type="date" style={inputStyle} />
               </Field>
               <Field label="Budget ₹">
                 <input value={podBudget} onChange={e => setPodBudget(e.target.value)} type="number" placeholder="12000" style={inputStyle} />

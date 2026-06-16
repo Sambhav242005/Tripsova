@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     AI_MODEL: str = "gemma4:31b-cloud"
     AI_TIMEOUT_SECONDS: int = 120
 
-    CORS_ORIGINS: str = "https://tripsova.sambhav-surana.online,http://localhost:5173,http://localhost:3000,http://localhost:3001,http://localhost:8000"
+    CORS_ORIGINS: str = "https://tripsova.sambhav-surana.online,http://localhost:5173,http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001,http://localhost:8000,http://127.0.0.1:8000"
 
     OFFLINE_PACK_MAX_SIZE_MB: int = 50
 

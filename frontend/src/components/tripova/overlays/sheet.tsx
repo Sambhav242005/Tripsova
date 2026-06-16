@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useId } from "react";
 import type { Theme } from "@/data";
 import { Icon } from "../icon";
 
@@ -11,12 +11,26 @@ export function Sheet({
 }: {
   open: boolean; onClose: () => void; t: Theme; children: React.ReactNode; title?: string;
 }) {
+  const titleId = useId();
+
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onClose, open]);
+
+  if (!open) return null;
+
   return (
     <div
       className="fixed inset-0 z-[300] flex justify-center items-end md:items-center md:p-6"
-      style={{ pointerEvents: open ? "auto" : "none" }}
+      style={{ pointerEvents: "auto" }}
       role="dialog"
       aria-modal="true"
+      aria-labelledby={title ? titleId : undefined}
     >
       {/* Backdrop */}
       <div
@@ -30,10 +44,8 @@ export function Sheet({
         className={[
           "relative w-full max-w-[440px] md:max-w-[480px] overflow-y-auto",
           "rounded-t-[22px] md:rounded-[20px]",
-          "transition-all duration-300 ease-out",
-          open
-            ? "translate-y-0 opacity-100 md:scale-100"
-            : "translate-y-full opacity-100 md:translate-y-0 md:opacity-0 md:scale-95",
+          "transition-transform duration-300 ease-out",
+          "translate-y-0 opacity-100 md:scale-100",
         ].join(" ")}
         style={{
           background: t.bg,
@@ -50,7 +62,7 @@ export function Sheet({
 
         {title && (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 18px 12px" }}>
-            <span style={{ fontSize: 20, fontWeight: 700 }}>{title}</span>
+            <span id={titleId} style={{ fontSize: 20, fontWeight: 700 }}>{title}</span>
             <button
               onClick={onClose}
               aria-label="Close"

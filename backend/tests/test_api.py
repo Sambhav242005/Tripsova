@@ -1,6 +1,8 @@
 import pytest
 from httpx import AsyncClient
 
+from app.config import settings
+
 
 class TestRoot:
     @pytest.mark.asyncio
@@ -21,6 +23,12 @@ class TestHealth:
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "healthy"
+
+
+class TestConfig:
+    def test_cors_allows_localhost_and_loopback_frontend_origins(self):
+        assert "http://localhost:3000" in settings.cors_origins_list
+        assert "http://127.0.0.1:3000" in settings.cors_origins_list
 
 
 class TestIntegration:
@@ -77,6 +85,12 @@ class TestIntegration:
 
         response = await client.get("/api/destinations")
         assert response.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_my_trips_returns_empty_list_for_authenticated_user(self, client: AsyncClient, user_headers: dict):
+        response = await client.get("/api/trips/my", headers=user_headers)
+        assert response.status_code == 200
+        assert response.json() == []
 
     @pytest.mark.asyncio
     async def test_public_endpoints_no_auth_required(self, client: AsyncClient):

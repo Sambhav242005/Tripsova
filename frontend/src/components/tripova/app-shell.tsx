@@ -13,7 +13,7 @@ import { PureFindScreen } from "./screens/purefind-screen";
 import { PodsScreen } from "./screens/pods-screen";
 import { PlanScreen } from "./screens/plan-screen";
 import { RouteScreen } from "./screens/route-screen";
-import { JourneyScreen } from "./screens/journey-screen";
+import { JourneyScreen, type JourneySeed } from "./screens/journey-screen";
 import { BudgetScreen } from "./screens/budget-screen";
 import { OfflineMapsScreen } from "./screens/offline-maps-screen";
 import { ProfileScreen } from "./screens/profile-screen";
@@ -74,8 +74,10 @@ export function AppShell() {
   const [emergencyOpen, setEmergencyOpen] = useState(false);
   const [createdPosts, setCreatedPosts] = useState<FeedPostResponse[]>([]);
   const [, setCreatedPods] = useState<TripPodResponse[]>([]);
+  const [journeySeed, setJourneySeed] = useState<JourneySeed | null>(null);
   const [authView, setAuthView] = useState<"login" | "register">("login");
   const mainScrollRef = useRef<HTMLDivElement>(null);
+  const journeySeedSeq = useRef(0);
 
   const active = dest ? "dest" : (sub || tab);
   const isOverlay = !!dest || ["plan", "journey", "route", "budget", "maps", "settings", "support"].includes(active);
@@ -97,8 +99,16 @@ export function AppShell() {
       window.scrollTo({ top: 0, behavior: "smooth" });
     });
   };
-  const openDest = (id: string) => { setDest(id); scrollToTop(); };
-  const goTab = (id: string) => { setTab(id); setSub(null); setDest(null); scrollToTop(); };
+  const openDest = (id: string) => { setJourneySeed(null); setDest(id); scrollToTop(); };
+  const goTab = (id: string) => { setJourneySeed(null); setTab(id); setSub(null); setDest(null); scrollToTop(); };
+  const goSub = (id: string) => { setJourneySeed(null); setSub(id); scrollToTop(); };
+  const openJourney = (seed: Omit<JourneySeed, "key">) => {
+    journeySeedSeq.current += 1;
+    setJourneySeed({ ...seed, key: `journey-${journeySeedSeq.current}` });
+    setDest(null);
+    setSub("journey");
+    scrollToTop();
+  };
 
   const renderScreen = () => {
     if (dest) return <DestinationHub t={t} destId={dest} openPods={() => { setDest(null); setTab("pods"); scrollToTop(); }} openPureFind={() => { setDest(null); setTab("purefind"); scrollToTop(); }} />;
@@ -106,10 +116,10 @@ export function AppShell() {
       case "home": return <HomeScreen t={t} openDest={openDest} openTab={goTab} createdPosts={createdPosts} />;
       case "discover": return <DiscoverScreen t={t} openDest={openDest} />;
       case "purefind": return <PureFindScreen t={t} />;
-      case "pods": return <PodsScreen t={t} />;
-      case "profile": return <ProfileScreen t={t} lang={lang} setLang={setLang} go={(id) => { setSub(id); scrollToTop(); }} />;
+      case "pods": return <PodsScreen t={t} openJourney={openJourney} />;
+      case "profile": return <ProfileScreen t={t} lang={lang} setLang={setLang} go={goSub} />;
       case "plan": return <PlanScreen t={t} />;
-      case "journey": return <JourneyScreen t={t} />;
+      case "journey": return <JourneyScreen key={journeySeed?.key || "journey-manual"} t={t} seed={journeySeed} />;
       case "route": return <RouteScreen t={t} />;
       case "budget": return <BudgetScreen t={t} />;
       case "maps": return <OfflineMapsScreen t={t} />;
@@ -125,6 +135,7 @@ export function AppShell() {
       <div style={{ position: "relative" }}>
         <button
           onClick={() => setLangOpen(o => !o)}
+          aria-label="Change language"
           style={{
             height: 36, padding: "0 12px", borderRadius: 10,
             border: `1px solid ${t.border}`, background: t.card, color: t.text,
@@ -165,10 +176,11 @@ export function AppShell() {
       </div>
       <button
         onClick={() => setDark(d => !d)}
+        aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
         style={{
           width: 36, height: 36, borderRadius: 10, border: `1px solid ${t.border}`,
           background: t.card, cursor: "pointer", display: "flex", alignItems: "center",
-          justifyContent: "center", transition: "all 0.2s",
+          justifyContent: "center", transition: "background 0.2s, border-color 0.2s",
         }}
       >
         <Icon name={dark ? "Sun" : "Moon"} size={16} color={t.text} />
@@ -354,7 +366,7 @@ export function AppShell() {
                   style={{
                     width: 36, height: 36, borderRadius: 10, border: `1px solid ${t.border}`,
                     background: t.card, cursor: "pointer", alignItems: "center",
-                    justifyContent: "center", transition: "all 0.15s",
+                    justifyContent: "center", transition: "background 0.15s, border-color 0.15s",
                   }}
                 >
                   <Icon name="Menu" size={18} color={t.text} />
@@ -401,14 +413,14 @@ export function AppShell() {
                 style={{
                   background: "transparent", border: "none", cursor: "pointer",
                   display: "flex", flexDirection: "column", alignItems: "center",
-                  gap: 2, padding: "4px 6px", minWidth: 58, transition: "all 0.2s ease",
+                  gap: 2, padding: "4px 6px", minWidth: 58, transition: "color 0.2s ease, background 0.2s ease",
                 }}
               >
                 <div style={{
                   width: 40, height: 32, borderRadius: 8,
                   background: isActive ? t.accent + "10" : "transparent",
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  transition: "all 0.2s",
+                  transition: "background 0.2s",
                 }}>
                   <Icon
                     name={item.icon}

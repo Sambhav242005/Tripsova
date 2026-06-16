@@ -25,13 +25,14 @@ export function DiscoverScreen({ t, openDest }: { t: Theme; openDest: (id: strin
           <Icon name="Search" size={17} color={t.muted} />
         </span>
         <input
+          aria-label="Search destinations"
           value={q}
           onChange={e => setQ(e.target.value)}
           placeholder="Search destinations — Bali, Spiti, Goa..."
           style={{
             width: "100%", padding: "14px 16px 14px 44px", borderRadius: 14,
             border: `1px solid ${t.border}`, background: t.card, color: t.text,
-            fontSize: 14, outline: "none", boxSizing: "border-box",
+            fontSize: 14, outline: "2px solid transparent", outlineOffset: 2, boxSizing: "border-box",
             transition: "border-color 0.2s, box-shadow 0.2s",
             boxShadow: `0 1px 3px ${t.overlay}`,
           }}

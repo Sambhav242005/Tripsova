@@ -8,6 +8,8 @@ import { Icon } from "../icon";
 import { CompatBadge, TrustBadge, InterestChip, FoodBadge } from "../badges/index";
 import { api, ApiError } from "@/lib/api";
 import type { TripPodResponse, PaginatedList } from "@/lib/types";
+import { useAuth } from "../auth/auth-context";
+import type { JourneySeed } from "./journey-screen";
 
 const GRADIENTS = [
   "linear-gradient(150deg,#1E2740,#5A6B96)",
@@ -24,15 +26,34 @@ function transformPod(p: TripPodResponse, idx: number) {
   const start = p.start_date ? new Date(p.start_date) : null;
   const end = p.end_date ? new Date(p.end_date) : null;
   const fmt = (d: Date) => d.toLocaleDateString("en-IN", { month: "short", day: "numeric" });
-  let dates = "Flexible";
+  const styleMeta = p.travel_style;
+  const meta = styleMeta && !Array.isArray(styleMeta) && typeof styleMeta === "object" ? styleMeta as Record<string, unknown> : {};
+  const rawDates =
+    typeof meta.dates === "string"
+      ? meta.dates
+      : null;
+  let dates = rawDates || "Flexible";
   if (start && end) dates = `${fmt(start)}–${fmt(end)}`;
   else if (start) dates = `${fmt(start)} onwards`;
   const duration = start && end ? `${Math.ceil((end.getTime() - start.getTime()) / 86400000)} days` : "—";
-  const travelStyle = Array.isArray(p.travel_style) ? p.travel_style[0] : typeof p.travel_style === "string" ? p.travel_style : null;
+  let travelStyle = Array.isArray(styleMeta) ? styleMeta[0] : typeof styleMeta === "string" ? styleMeta : null;
+  if (!travelStyle) {
+    const value = meta.style || meta.preference;
+    travelStyle = typeof value === "string" ? value : null;
+  }
+  const origin = typeof meta.origin === "string" ? meta.origin : "";
+  const destinationName = typeof meta.destination === "string" ? meta.destination : (p.title || "Untitled Pod");
+  const people = typeof meta.people === "number" ? meta.people : (p.max_members || 1);
   const spots = Math.max(0, (p.max_members || 5) - (p.member_count || 0));
   return {
     id: p.id,
+    creatorId: p.creator_id,
     destination: p.title || "Untitled Pod",
+    destinationName,
+    origin,
+    people,
+    budgetValue: p.budget,
+    departure: p.start_date ? `${p.start_date.slice(0, 10)}T08:00` : undefined,
     dates,
     duration,
     budget: p.budget ? `₹${p.budget.toLocaleString("en-IN")}` : "₹—",
@@ -79,10 +100,11 @@ function SkeletonCard({ t }: { t: Theme }) {
   );
 }
 
-export function PodsScreen({ t }: { t: Theme }) {
+export function PodsScreen({ t, openJourney }: { t: Theme; openJourney?: (seed: Omit<JourneySeed, "key">) => void }) {
+  const { user } = useAuth();
   const [tab, setTab] = useState("find");
   const [joined, setJoined] = useState<Record<string, boolean>>({});
-  const [apiItems, setApiItems] = useState<Record<string, unknown>[] | null>(null);
+  const [apiItems, setApiItems] = useState<ReturnType<typeof transformPod>[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const myInterests = ["Photography", "Food Exploration", "Hiking"];
@@ -91,7 +113,7 @@ export function PodsScreen({ t }: { t: Theme }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.get<PaginatedList<TripPodResponse>>("/api/trippods");
+      const res = await api.get<PaginatedList<TripPodResponse>>("/api/trippods?page=1&per_page=100");
       setApiItems(res.items.map((p, i) => transformPod(p, i)));
     } catch (e) {
       setApiItems(null);
@@ -104,21 +126,30 @@ export function PodsScreen({ t }: { t: Theme }) {
   useEffect(() => { startTransition(() => { fetchPods(); }); }, [fetchPods]);
 
   const displayPods = apiItems ?? [];
+  const myPods = user ? displayPods.filter(pod => pod.creatorId === user.id) : [];
+  const visiblePods = tab === "mine" ? myPods : displayPods;
+  const emptyTitle = tab === "mine" ? "No pods created yet" : "No pods matching your criteria";
+  const emptyBody = tab === "mine"
+    ? "Create a trip pod and it will appear here with its route details."
+    : "Try different filters or create your own pod to attract companions.";
 
   return (
     <div style={{ padding: "16px 16px 16px" }}>
       <ScreenHeader t={t} eyebrow="Travel together" title="TripPods" subtitle="Find verified companions heading your way." />
-      <div style={{ display: "flex", background: t.tag, borderRadius: 12, padding: 3, marginBottom: 20 }}>
+      <div role="tablist" aria-label="TripPod view" style={{ display: "flex", background: t.tag, borderRadius: 12, padding: 3, marginBottom: 20 }}>
         {["find", "mine"].map(tb => (
           <button
             key={tb}
+            type="button"
+            role="tab"
+            aria-selected={tab === tb}
             onClick={() => setTab(tb)}
             style={{
               flex: 1, padding: "10px", borderRadius: 9, border: "none",
               background: tab === tb ? t.card : "transparent",
               color: tab === tb ? t.accent : t.muted,
               fontWeight: tab === tb ? 700 : 500, cursor: "pointer", fontSize: 13,
-              transition: "all 0.2s",
+              transition: "background 0.2s, color 0.2s, box-shadow 0.2s",
               boxShadow: tab === tb ? "0 1px 3px rgba(13,19,32,0.08)" : "none",
             }}
           >
@@ -140,26 +171,34 @@ export function PodsScreen({ t }: { t: Theme }) {
         </div>
       )}
 
-      {tab === "find" && loading && [1, 2, 3].map(i => <SkeletonCard key={i} t={t} />)}
+      {loading && [1, 2, 3].map(i => <SkeletonCard key={i} t={t} />)}
 
-      {tab === "find" && !loading && apiItems && apiItems.length === 0 && (
+      {!loading && apiItems && visiblePods.length === 0 && (
         <div style={{ textAlign: "center", padding: "60px 28px" }}>
           <div style={{ width: 64, height: 64, borderRadius: 20, background: t.tag, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 18px" }}>
-            <Icon name="Search" size={30} color={t.muted} />
+            <Icon name={tab === "mine" ? "Users" : "Search"} size={30} color={tab === "mine" ? t.secondary : t.muted} />
           </div>
-          <div style={{ fontSize: 20, color: t.heading, marginBottom: 8, lineHeight: 1.25 }}>No pods matching your criteria</div>
-          <div style={{ fontSize: 14, color: t.muted, marginBottom: 24, lineHeight: 1.5 }}>Try different filters or create your own pod to attract companions.</div>
-          <Btn onClick={() => setTab("find")} t={t}>Browse All</Btn>
+          <div style={{ fontSize: 20, color: t.heading, marginBottom: 8, lineHeight: 1.25 }}>{emptyTitle}</div>
+          <div style={{ fontSize: 14, color: t.muted, marginBottom: 24, lineHeight: 1.5 }}>{emptyBody}</div>
+          {tab === "mine" && <Btn onClick={() => setTab("find")} t={t}>Browse Pods</Btn>}
         </div>
       )}
 
-      {tab === "find" && !loading && displayPods.map((rawPod, idx) => {
-        const pod = rawPod as Record<string, unknown>;
+      {!loading && visiblePods.map((rawPod, idx) => {
+        const pod = rawPod;
         return (
         <div key={String(pod.id ?? idx)} style={{ background: t.card, borderRadius: 18, overflow: "hidden", marginBottom: 16, border: `1px solid ${t.border}`, boxShadow: "0 1px 3px rgba(13,19,32,0.04)" }}>
-          <div style={{ height: 90, background: pod.gradient as string, position: "relative" }}>
-            <div style={{ position: "absolute", top: 11, left: 12, background: "rgba(0,0,0,0.42)", backdropFilter: "blur(4px)", borderRadius: 7, padding: "4px 10px", fontSize: 11, color: "#fff", fontWeight: 600 }}>{pod.style as string}</div>
-            <div style={{ position: "absolute", top: 11, right: 12 }}><CompatBadge pct={pod.compatibility as number} t={t} /></div>
+            <div style={{ height: 90, background: pod.gradient as string, position: "relative" }}>
+              <div style={{ position: "absolute", top: 11, left: 12, background: "rgba(0,0,0,0.42)", backdropFilter: "blur(4px)", borderRadius: 7, padding: "4px 10px", fontSize: 11, color: "#fff", fontWeight: 600 }}>{pod.style as string}</div>
+              <div style={{ position: "absolute", top: 11, right: 12 }}>
+                {(pod.compatibility as number) > 0 ? (
+                  <CompatBadge pct={pod.compatibility as number} t={t} />
+                ) : (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5, borderRadius: 999, padding: "5px 10px", border: "1px solid rgba(255,255,255,0.34)", background: "rgba(0,0,0,0.28)", color: "#fff", fontSize: 11, fontWeight: 700 }}>
+                    <Icon name="Sparkles" size={12} color="#fff" /> Fresh pod
+                  </span>
+                )}
+              </div>
             <div style={{ position: "absolute", bottom: 11, left: 12, color: "#fff" }}>
               <div style={{ fontSize: 19 }}>{pod.destination as string}</div>
               <div style={{ fontSize: 11.5, opacity: 0.9 }}>{(pod.dates as string)} · {pod.duration as string}</div>
@@ -172,17 +211,27 @@ export function PodsScreen({ t }: { t: Theme }) {
                 <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                   <span style={{ fontSize: 14, color: t.heading }}>{pod.host as string}</span>
                   {(pod.verified as boolean) && <Icon name="BadgeCheck" size={14} color={t.secondary} />}
-                  <TrustBadge score={pod.score as number} t={t} />
+                  {(pod.score as number) > 0 ? (
+                    <TrustBadge score={pod.score as number} t={t} />
+                  ) : (
+                    <span style={{ padding: "3px 8px", borderRadius: 8, border: `1px solid ${t.border}`, background: t.tag, color: t.muted, fontSize: 11, fontWeight: 700 }}>New</span>
+                  )}
                 </div>
+                {(pod.podRating as number) > 0 || (pod.pastPods as number) > 0 ? (
                 <div style={{ fontSize: 11.5, color: t.muted, marginTop: 1, display: "flex", alignItems: "center", gap: 5 }}>
                   <Icon name="Star" size={11} color={t.warning} /> {pod.podRating as number} pod rating · {pod.pastPods as number} trips hosted
                 </div>
+                ) : (
+                  <div style={{ fontSize: 11.5, color: t.muted, marginTop: 1, display: "flex", alignItems: "center", gap: 5 }}>
+                    <Icon name="Star" size={11} color={t.warning} /> No pod ratings yet
+                  </div>
+                )}
               </div>
             </div>
             <p style={{ fontSize: 13.5, color: t.text, lineHeight: 1.55, margin: "0 0 11px" }}>&quot;{pod.intro as string}&quot;</p>
-            <button style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "7px 13px", borderRadius: 20, border: `1px solid ${t.border}`, background: t.tag, color: t.text, fontSize: 12, fontWeight: 600, cursor: "pointer", marginBottom: 13 }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "7px 13px", borderRadius: 20, border: `1px solid ${t.border}`, background: t.tag, color: t.text, fontSize: 12, fontWeight: 600, marginBottom: 13 }}>
               <Icon name="Play" size={12} color={t.accent} /> {pod.voice as string}
-            </button>
+            </span>
 
             <div style={{ marginBottom: 13 }}>
               <div style={{ fontSize: 10.5, fontWeight: 700, color: t.muted, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 7 }}>Shared Interests</div>
@@ -199,31 +248,56 @@ export function PodsScreen({ t }: { t: Theme }) {
                 <div style={{ fontSize: 16, fontWeight: 700, color: t.accent }}>{pod.budget as string}<span style={{ fontSize: 11, color: t.muted, fontWeight: 400 }}>/person</span></div>
                 <div style={{ fontSize: 11.5, color: (pod.spots as number) <= 1 ? t.danger : t.success, fontWeight: 700 }}>{(pod.spots as number)} of {pod.size as number} spots left</div>
               </div>
-              <button
-                onClick={() => setJoined(j => ({ ...j, [pod.id as string]: !j[pod.id as string] }))}
-                style={{
-                  padding: "10px 20px", borderRadius: 9, border: "none",
-                  background: joined[pod.id as string] ? t.success : `linear-gradient(135deg,${t.accent},${t.secondary})`,
-                  color: "#fff", fontSize: 13.5, fontWeight: 700, cursor: "pointer",
-                  display: "flex", alignItems: "center", gap: 6,
-                }}
-              >
-                {joined[pod.id as string] ? <><Icon name="Check" size={15} color="#fff" /> Requested</> : "Request to Join"}
-              </button>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                {openJourney && pod.origin && (
+                  <button
+                    onClick={() => openJourney({
+                      origin: pod.origin as string,
+                      destination: pod.destinationName as string,
+                      people: pod.people as number,
+                      budget: pod.budgetValue as number | undefined,
+                      departure: pod.departure as string | undefined,
+                      autoPlan: true,
+                    })}
+                    style={{
+                      padding: "10px 14px", borderRadius: 9, border: `1px solid ${t.border}`,
+                      background: t.tag, color: t.accent, fontSize: 13, fontWeight: 700, cursor: "pointer",
+                      display: "flex", alignItems: "center", gap: 6,
+                    }}
+                  >
+                    <Icon name="Navigation" size={14} color={t.accent} /> Plan route
+                  </button>
+                )}
+                {tab === "mine" ? (
+                  <button
+                    disabled
+                    style={{
+                      padding: "10px 14px", borderRadius: 9, border: "none",
+                      background: t.success + "18", color: t.success, fontSize: 13, fontWeight: 700,
+                      display: "flex", alignItems: "center", gap: 6,
+                    }}
+                  >
+                    <Icon name="Check" size={15} color={t.success} /> Your pod
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setJoined(j => ({ ...j, [pod.id as string]: !j[pod.id as string] }))}
+                    style={{
+                      padding: "10px 20px", borderRadius: 9, border: "none",
+                      background: joined[pod.id as string] ? t.success : `linear-gradient(135deg,${t.accent},${t.secondary})`,
+                      color: "#fff", fontSize: 13.5, fontWeight: 700, cursor: "pointer",
+                      display: "flex", alignItems: "center", gap: 6,
+                    }}
+                  >
+                    {joined[pod.id as string] ? <><Icon name="Check" size={15} color="#fff" /> Requested</> : "Request to Join"}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
         );
       })}
-
-      {tab === "mine" && (
-        <div style={{ textAlign: "center", padding: "60px 28px" }}>
-          <div style={{ width: 64, height: 64, borderRadius: 20, background: t.tag, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 18px" }}><Icon name="Users" size={30} color={t.secondary} /></div>
-          <div style={{ fontSize: 20, color: t.heading, marginBottom: 8, lineHeight: 1.25 }}>Every great trip starts with one traveller saying hello.</div>
-          <div style={{ fontSize: 14, color: t.muted, marginBottom: 24, lineHeight: 1.5 }}>Join a pod above, or create your own and let companions come to you.</div>
-          <Btn onClick={() => setTab("find")} t={t}>Browse Pods</Btn>
-        </div>
-      )}
     </div>
   );
 }

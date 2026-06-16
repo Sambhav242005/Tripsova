@@ -8,7 +8,7 @@ import { Icon } from "../icon";
 import { TrustBadge, MultiSelectFood } from "../badges/index";
 import { api, isAuthenticated, ApiError } from "@/lib/api";
 import { useAuth } from "../auth/auth-context";
-import type { UserResponse, TrustScoreResponse } from "@/lib/types";
+import type { UserResponse, TrustScoreResponse, TripResponse, TripPodResponse, PaginatedList } from "@/lib/types";
 
 function getInitials(name: string): string {
   return name
@@ -73,6 +73,8 @@ export function ProfileScreen({ t, lang, setLang, go }: { t: Theme; lang: string
   const [editAvatarUrl, setEditAvatarUrl] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [tripCount, setTripCount] = useState<number | null>(null);
+  const [podCount, setPodCount] = useState<number | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -116,14 +118,28 @@ export function ProfileScreen({ t, lang, setLang, go }: { t: Theme; lang: string
       .catch(() => {});
   }, [user]);
 
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    Promise.all([
+      api.get<TripResponse[]>("/api/trips/my").catch(() => [] as TripResponse[]),
+      api.get<PaginatedList<TripPodResponse>>("/api/trippods?page=1&per_page=100").catch(() => null),
+    ]).then(([trips, pods]) => {
+      if (cancelled) return;
+      setTripCount(trips.length);
+      setPodCount((pods?.items || []).filter(pod => pod.creator_id === user.id).length);
+    });
+    return () => { cancelled = true; };
+  }, [user]);
+
   const displayName = user?.name || "Traveller";
   const displayHandle = user?.name ? deriveHandle(user.name) : "";
   const displayAvatar = user?.name ? getInitials(user.name) : "TR";
   const displayTrust = user?.trust_score ?? 0;
   const stats = [
-    { label: "Trips", value: "—" },
+    { label: "Trips", value: tripCount === null ? "..." : String(tripCount) },
     { label: "Countries", value: "—" },
-    { label: "TripPods", value: "—" },
+    { label: "TripPods", value: podCount === null ? "..." : String(podCount) },
     { label: "Reviews", value: "—" },
   ];
   const trustBars: TrustBar[] = trustScore?.components
