@@ -1,19 +1,31 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getPlace } from "@/lib/server-api";
+import { HomeCrumb } from "@/components/tripova/home-crumb";
 import type { PlaceResponse } from "@/lib/types";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://tripsova.com";
+
+// Serialize JSON-LD safely for inline injection. A place name could contain
+// "</script>" or "<" (it comes from third-party OSM data), which would otherwise
+// break out of the <script> tag and allow stored XSS. Escape the characters that
+// are dangerous inside an HTML <script> context.
+function jsonLdScript(data: unknown): string {
+  return JSON.stringify(data)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026");
+}
 
 const C = {
   bg: "#FAF9F6",
   card: "#FFFFFF",
   navy: "#1B263B",
-  gold: "#B0894A",
+  gold: "#8A6A2E",
   goldFill: "#D4B483",
   text: "#2E2E2E",
-  muted: "#6E7681",
+  muted: "#636A75",
   border: "#E4E2DC",
   teal: "#5E8295",
   tag: "#EFEDE8",
@@ -69,6 +81,15 @@ export default async function FoodDetailPage({ params }: Props) {
   const url = `${SITE_URL}/food/${place.slug}`;
   const rating = ratingOutOfFive(place);
   const kind = typeLabel(place.type);
+
+  // Google Maps deep link. Prefer name + address (resolves to the actual business);
+  // fall back to coordinates so the pin is still accurate when we have no address.
+  const mapsQuery = place.address
+    ? `${place.name}, ${place.address}`
+    : place.latitude != null && place.longitude != null
+    ? `${place.latitude},${place.longitude}`
+    : place.name;
+  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapsQuery)}`;
 
   const jsonLd: Record<string, unknown> = {
     "@context": "https://schema.org",
@@ -137,18 +158,16 @@ export default async function FoodDetailPage({ params }: Props) {
     >
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: jsonLdScript(jsonLd) }}
       />
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumb) }}
+        dangerouslySetInnerHTML={{ __html: jsonLdScript(breadcrumb) }}
       />
 
       <div style={{ maxWidth: 760, margin: "0 auto", padding: "32px 20px 80px" }}>
         <nav style={{ fontSize: 13, color: C.muted, marginBottom: 18 }}>
-          <Link href="/" style={{ color: C.muted, textDecoration: "none" }}>
-            Home
-          </Link>
+          <HomeCrumb color={C.muted} />
           {" / "}
           <Link href="/destinations" style={{ color: C.muted, textDecoration: "none" }}>
             Destinations
@@ -186,6 +205,52 @@ export default async function FoodDetailPage({ params }: Props) {
             <p style={{ color: C.muted, fontSize: 15, margin: 0 }}>{place.address}</p>
           )}
         </header>
+
+        {/* Quick actions — find it on the map, and (where we have it) jump to the
+            venue's own site for the menu. We don't host menus ourselves. */}
+        <section style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 26 }}>
+          <a
+            href={mapsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              background: C.navy,
+              color: "#fff",
+              fontWeight: 700,
+              fontSize: 14,
+              padding: "11px 18px",
+              borderRadius: 10,
+              textDecoration: "none",
+            }}
+          >
+            📍 Open in Google Maps
+          </a>
+          {place.website && (
+            <a
+              href={place.website}
+              target="_blank"
+              rel="noopener noreferrer nofollow"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                background: C.card,
+                color: C.navy,
+                fontWeight: 700,
+                fontSize: 14,
+                padding: "11px 18px",
+                borderRadius: 10,
+                border: `1px solid ${C.border}`,
+                textDecoration: "none",
+              }}
+            >
+              🍽 View menu &amp; website
+            </a>
+          )}
+        </section>
 
         {place.photos?.[0] && (
           // eslint-disable-next-line @next/next/no-img-element
@@ -306,7 +371,7 @@ export default async function FoodDetailPage({ params }: Props) {
             Tripsova surfaces diet-aware, traveller-verified food near you — with offline access when you need it.
           </p>
           <Link
-            href="/app"
+            href="/login"
             style={{
               display: "inline-block",
               background: C.goldFill,

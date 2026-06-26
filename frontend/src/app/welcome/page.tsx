@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   title: "Tripsova — Discover through people",
   description:
     "Tripsova plans safer, smarter trips on traveller-verified ground truth: AI itineraries, diet-aware food (PureFind), verified companions (TripPods), TrustScore, and offline packs.",
-  alternates: { canonical: "/" },
+  alternates: { canonical: "/welcome" },
 };
 
 const serif = "var(--font-dm-serif), Georgia, serif";
@@ -63,7 +63,7 @@ function Hero() {
         </p>
         <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
           <Link
-            href="/app"
+            href="/login"
             style={{
               background: `linear-gradient(135deg, ${C.navy}, ${C.teal})`,
               color: "#fff",
@@ -277,11 +277,11 @@ function FinalCTA() {
         <h2 style={{ fontFamily: serif, fontSize: "clamp(26px, 4vw, 38px)", margin: "0 0 12px" }}>
           Your next trip, planned by people who&apos;ve been there.
         </h2>
-        <p style={{ fontSize: 16, opacity: 0.85, maxWidth: 520, margin: "0 auto 26px", lineHeight: 1.6 }}>
+        <p style={{ fontSize: 17, fontWeight: 500, color: "rgba(255,255,255,0.95)", maxWidth: 520, margin: "0 auto 26px", lineHeight: 1.65 }}>
           Start with where you want to go. Get a verified, diet-aware, offline-ready plan in seconds.
         </p>
         <Link
-          href="/app"
+          href="/login"
           style={{
             display: "inline-block",
             background: C.goldFill,

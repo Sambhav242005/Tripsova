@@ -1,36 +1,55 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Tripova Frontend
 
-## Getting Started
+Next.js app for Tripova — an India-first travel discovery platform.
 
-First, run the development server:
+## Stack
+
+- **Next.js** (React 19) with client components
+- **TypeScript**
+- **lucide-react** for icons
+- **Inline styles** driven by theme tokens (no Tailwind on app screens)
+
+## Setup
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Opens on `http://localhost:3000`. The app expects a running backend at `NEXT_PUBLIC_API_URL` (default: `http://localhost:8000`).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Commands
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Development server |
+| `npm run build` | Production build |
+| `npm run lint` | ESLint |
+| `npm run typecheck` | TypeScript type checking |
+| `npm run test:e2e` | Playwright E2E tests |
 
-## Learn More
+## Structure
 
-To learn more about Next.js, take a look at the following resources:
+```
+src/
+├── app/                    # Next.js routes
+│   ├── (app)/              # Authenticated app shell (layout + per-screen pages)
+│   ├── about/              # Marketing / public pages
+│   ├── destinations/       # SSR destination pages
+│   ├── food/               # SSR food pages
+│   └── welcome/            # Marketing landing
+├── components/tripova/     # All app UI components
+│   ├── screens/            # 16 screen files
+│   ├── auth/               # Auth context + login/register
+│   └── primitives/         # Shared UI (ScreenHeader, Card, Btn, etc.)
+├── lib/                    # API client, types, hooks
+└── data/                   # Theme tokens, translations
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Data
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+All screens fetch live data from the backend API. No hardcoded demo content. See `src/lib/types.ts` for API response types.
 
-## Deploy on Vercel
+## Theme
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Brand palette: Midnight Navy, Dusty Blue, Champagne Gold. Two theme objects (`LIGHT`/`DARK` in `src/data/theme.ts`) drive all colours via a `t` prop.

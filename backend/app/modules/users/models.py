@@ -171,6 +171,32 @@ class Trip(Base):
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
+class Journey(Base):
+    """A planned journey (auto-mode origin→destination), saved so the traveller can
+    reopen it later or let it compute in the background.
+
+    ``status`` is ``ready`` for a synchronously-planned journey, or ``pending`` →
+    ``ready``/``failed`` for one running as a background job. ``result`` holds the full
+    journey_planner output (legs, cost, route) so reopening needs no recompute.
+    """
+
+    __tablename__ = "journeys"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    origin = Column(String(255), nullable=False)
+    destination = Column(String(255), nullable=False)
+    round_trip = Column(Boolean, default=False)
+    people_count = Column(Integer, default=1)
+    budget = Column(Float, nullable=True)
+    departure_time = Column(DateTime(timezone=True), nullable=True)
+    status = Column(String(20), default="ready", index=True)  # pending | ready | failed
+    result = Column(JSON, nullable=True)
+    error = Column(String(500), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+
 class OfflinePack(Base):
     __tablename__ = "offline_packs"
 

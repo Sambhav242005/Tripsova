@@ -7,7 +7,7 @@ export interface FeedPost {
   location: string;
   category: string;
   time: string;
-  expiry: string;
+  expiry: string | null;
   content: string;
   helpful: number;
   comments: number;

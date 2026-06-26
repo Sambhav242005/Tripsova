@@ -1,21 +1,95 @@
 "use client";
 
-import React, { useState } from "react";
-import type { Theme } from "@/data";
-import { useDestinations } from "@/lib/destinations";
+import React, { useEffect, useRef, useState } from "react";
+import type { Destination, Theme } from "@/data";
+import { useDestinations, mapDestination } from "@/lib/destinations";
+import type { DestinationResponse, PaginatedList } from "@/lib/types";
+import { api, ApiError } from "@/lib/api";
 import { Icon } from "../icon";
 import { SectionTitle, ScreenHeader } from "../primitives/index";
+import type { JourneySeed } from "./journey-screen";
 
-export function DiscoverScreen({ t, openDest }: { t: Theme; openDest: (id: string) => void }) {
+// A city resolved live from OpenStreetMap when it isn't one of our curated
+// destinations — so a search for a real place never dead-ends at "0 results".
+interface GeoCity { name: string; latitude: number; longitude: number; }
+
+export function DiscoverScreen({
+  t,
+  openDest,
+  openJourney,
+}: {
+  t: Theme;
+  openDest: (id: string) => void;
+  openJourney?: (seed: Omit<JourneySeed, "key">) => void;
+}) {
   const [q, setQ] = useState("");
-  const { destinations, loading, error, reload } = useDestinations();
+  // Trending grid (no query) comes from the shared cached hook.
+  const { destinations, loading: trendingLoading, error: trendingError, reload } = useDestinations();
 
-  const data = destinations ?? [];
-  const matches = data.filter(d =>
-    q === "" ||
-    d.name.toLowerCase().includes(q.toLowerCase()) ||
-    d.country.toLowerCase().includes(q.toLowerCase())
-  );
+  // Search state — backend search + live geocode fallback, debounced.
+  const [results, setResults] = useState<Destination[] | null>(null);
+  const [geoCity, setGeoCity] = useState<GeoCity | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const reqSeq = useRef(0);
+
+  const query = q.trim();
+
+  useEffect(() => {
+    if (query === "") {
+      // Cleared input → reset the debounced-search results synchronously.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setResults(null);
+      setGeoCity(null);
+      setSearchError(null);
+      setSearching(false);
+      return;
+    }
+    const seq = ++reqSeq.current;
+    setSearching(true);
+    setSearchError(null);
+    const timer = window.setTimeout(async () => {
+      try {
+        // 1) Real server-side search across name/description/city/state/country.
+        const res = await api.get<PaginatedList<DestinationResponse>>(
+          `/api/destinations?page=1&per_page=20&search=${encodeURIComponent(query)}`,
+        );
+        if (seq !== reqSeq.current) return; // a newer keystroke superseded us
+        if (res.items.length > 0) {
+          setResults(res.items.map((d, i) => mapDestination(d, i)));
+          setGeoCity(null);
+        } else {
+          // 2) Nothing curated — try resolving it live so the user still gets a result.
+          setResults([]);
+          try {
+            const point = await api.get<GeoCity>(`/api/trips/geocode?q=${encodeURIComponent(query)}`);
+            if (seq !== reqSeq.current) return;
+            setGeoCity(point);
+          } catch (e) {
+            if (seq !== reqSeq.current) return;
+            // 404 = genuinely unknown place; anything else = transient/network.
+            setGeoCity(null);
+            if (!(e instanceof ApiError && e.status === 404)) {
+              setSearchError("Couldn't search right now. Check your connection and try again.");
+            }
+          }
+        }
+      } catch {
+        if (seq !== reqSeq.current) return;
+        setResults([]);
+        setSearchError("Couldn't search right now. Check your connection and try again.");
+      } finally {
+        if (seq === reqSeq.current) setSearching(false);
+      }
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+
+  const isSearch = query !== "";
+  const grid = isSearch ? results ?? [] : destinations ?? [];
+  const loading = isSearch ? searching : trendingLoading;
+  const error = isSearch ? searchError : trendingError;
+  const showEmpty = !loading && grid.length === 0 && !(isSearch && geoCity);
 
   return (
     <div style={{ padding: "12px 12px 16px" }}>
@@ -50,10 +124,10 @@ export function DiscoverScreen({ t, openDest }: { t: Theme; openDest: (id: strin
         }}>
           <span style={{ fontSize: 12.5, color: t.muted }}>{error}</span>
           <button
-            onClick={reload}
+            onClick={() => (isSearch ? setQ(q => q + " ") : reload())}
             style={{
               padding: "7px 16px", borderRadius: 10, border: "none",
-              background: t.accent, color: "#fff", fontSize: 12,
+              background: t.accent, color: t.onAccent, fontSize: 12,
               fontWeight: 700, cursor: "pointer",
             }}
           >
@@ -62,7 +136,7 @@ export function DiscoverScreen({ t, openDest }: { t: Theme; openDest: (id: strin
         </div>
       )}
 
-      <SectionTitle t={t}>{q ? `${matches.length} destinations` : "Trending Destinations"}</SectionTitle>
+      <SectionTitle t={t}>{isSearch ? `${grid.length} ${grid.length === 1 ? "destination" : "destinations"}` : "Trending Destinations"}</SectionTitle>
 
       {loading && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 26 }}>
@@ -77,18 +151,41 @@ export function DiscoverScreen({ t, openDest }: { t: Theme; openDest: (id: strin
         </div>
       )}
 
-      {!loading && matches.length === 0 && (
+      {/* Live-resolved city when nothing curated matched — keeps a real search useful. */}
+      {!loading && isSearch && grid.length === 0 && geoCity && (
+        <button
+          onClick={() => openJourney?.({ origin: "", destination: geoCity.name, autoPlan: false })}
+          style={{
+            width: "100%", textAlign: "left", marginBottom: 26, cursor: openJourney ? "pointer" : "default",
+            background: t.card, borderRadius: 20, padding: 18, border: `1px solid ${t.border}`,
+            boxShadow: `0 1px 3px ${t.overlay}`, display: "flex", alignItems: "center", gap: 14,
+          }}
+        >
+          <span style={{ width: 44, height: 44, borderRadius: 12, flexShrink: 0, background: t.accent + "15", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Icon name="MapPin" size={20} color={t.accent} />
+          </span>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ display: "block", fontSize: 15, fontWeight: 700, color: t.text }}>{geoCity.name}</span>
+            <span style={{ display: "block", fontSize: 12, color: t.muted, marginTop: 2 }}>
+              Not in our curated destinations yet — found via OpenStreetMap.{openJourney ? " Tap to plan a journey here." : ""}
+            </span>
+          </span>
+          {openJourney && <Icon name="ChevronRight" size={18} color={t.muted} />}
+        </button>
+      )}
+
+      {showEmpty && (
         <div style={{
           marginBottom: 26, textAlign: "center", padding: "36px 0",
           background: t.card, borderRadius: 20, border: `1px solid ${t.border}`,
         }}>
-          <div style={{ fontSize: 14, color: t.muted }}>{q ? "No destinations match your search." : "No destinations available yet."}</div>
+          <div style={{ fontSize: 14, color: t.muted }}>{isSearch ? `No place called “${query}” found.` : "No destinations available yet."}</div>
         </div>
       )}
 
-      {(!loading || error !== null) && matches.length > 0 && (
+      {!loading && grid.length > 0 && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 26 }}>
-          {matches.map(d => (
+          {grid.map(d => (
             <div
               key={d.id}
               onClick={() => openDest(d.id)}

@@ -1,13 +1,24 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Header, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import get_current_user_id
 from app.modules.trippods.schemas import TripPodCreate, TripPodResponse
 from app.modules.trippods.service import create_trip_pod, get_trip_pods, get_trip_pod, request_join, approve_member, reject_member
-from app.shared.pagination import PaginatedResult
+from app.security import decode_access_token
 
 router = APIRouter(prefix="/api/trippods", tags=["TripPods"])
+
+
+def optional_user_id(authorization: str = Header(None)) -> str | None:
+    if not authorization:
+        return None
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token:
+        return None
+    payload = decode_access_token(token)
+    return payload.get("sub") if payload else None
+
 
 @router.post("", status_code=201, response_model=TripPodResponse)
 async def create_pod(
@@ -24,9 +35,12 @@ async def list_pods(
     status: str = Query(None),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
+    user_id: str | None = Depends(optional_user_id),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await get_trip_pods(db, destination_id=destination_id, status=status, page=page, per_page=per_page)
+    result = await get_trip_pods(
+        db, destination_id=destination_id, status=status, page=page, per_page=per_page, user_id=user_id
+    )
     return {
         "items": [TripPodResponse.model_validate(p) for p in result.items],
         "total": result.total,
@@ -36,8 +50,12 @@ async def list_pods(
     }
 
 @router.get("/{pod_id}", response_model=TripPodResponse)
-async def get_pod(pod_id: str, db: AsyncSession = Depends(get_db)):
-    pod = await get_trip_pod(db, pod_id)
+async def get_pod(
+    pod_id: str,
+    user_id: str | None = Depends(optional_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    pod = await get_trip_pod(db, pod_id, user_id=user_id)
     return TripPodResponse.model_validate(pod)
 
 @router.post("/{pod_id}/join-request", response_model=dict)

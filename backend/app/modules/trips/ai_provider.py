@@ -24,10 +24,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.modules.destinations.models import Destination
 from app.modules.places.models import Place
-from app.modules.trips.transport import echo_mode, resolve_transport
+from app.modules.trips.feasibility import check_leg_feasibility, leg_warning
+from app.modules.trips.geocode import GeocodeError, geocode_city
+from app.modules.trips.live_places import fetch_live_pois
+from app.modules.trips.route_planner import plan_route
+from app.modules.trips.transport import echo_mode, leg_cost, resolve_transport
 from app.shared.utils import utcnow
 
 logger = logging.getLogger("tripsova.ai")
+
+
+def _leg_point(d: dict) -> dict:
+    """Strip a geocoded/catalogue point down to the {name, lat, lng} a leg needs."""
+    return {"name": d["name"], "latitude": d["latitude"], "longitude": d["longitude"]}
 
 # ─── Style-to-place-type mapping ──────────────────────────────────────────────
 STYLE_TYPE_MAP = {
@@ -267,6 +276,8 @@ class TripPlanner:
     def __init__(self, db: AsyncSession, data: dict):
         self.db = db
         self.destination_name = (data.get("destination") or "").strip()
+        # Optional starting point — drives the getting-there leg when supplied.
+        self.origin_name = (data.get("origin") or "").strip()
         self.days = data.get("days", 3)
         self.budget = data.get("budget", 0)
         self.people_count = data.get("peopleCount", 1)
@@ -286,6 +297,9 @@ class TripPlanner:
         self.scored_places: list[dict] = []
         self.scored_food: list[dict] = []
         self.fuel_places: list[dict] = []
+        # Live OSM POIs, fetched on-demand only when there's no synced catalogue.
+        self.live_sights: list[dict] = []
+        self.live_food: list[dict] = []
 
     # ── Clamped inputs (validated on every assignment) ──────────────────────
     @property
@@ -321,7 +335,7 @@ class TripPlanner:
         budget_plan = self._calculate_budget()
         safety = self._collect_safety_notes()
 
-        return {
+        plan = {
             "summary": self._make_summary(),
             "destinationId": str(self.destination.id) if self.destination else None,
             "destinationName": self.destination.name if self.destination else self.destination_name,
@@ -340,6 +354,83 @@ class TripPlanner:
             "offlinePackSuggested": True,
             "generatedAt": utcnow().isoformat(),
         }
+        getting_there = await self._plan_getting_there()
+        if getting_there:
+            plan["gettingThere"] = getting_there
+        return plan
+
+    # ── Getting there: the real origin→destination leg ──────────────────────
+    async def _plan_getting_there(self) -> dict | None:
+        """When the traveller says where they're starting from, compute the actual
+        origin→destination leg with their chosen transport: route distance/time, fuel
+        stops along the way, and the travel cost. Best-effort and optional — any failure
+        (origin not found, or an impossible mode like a 100 km flight) returns a small
+        object carrying a `note`, so the destination itinerary is never broken by it."""
+        # getattr keeps this safe for callers that build a planner via __new__ (tests).
+        if not getattr(self, "origin_name", ""):
+            return None
+
+        transport, _ = resolve_transport(self.travel_mode)
+
+        try:
+            origin_pt = await geocode_city(self.db, self.origin_name)
+            if self.destination and self.destination.latitude is not None and self.destination.longitude is not None:
+                dest_pt = {
+                    "name": self.destination.name,
+                    "latitude": self.destination.latitude,
+                    "longitude": self.destination.longitude,
+                }
+            else:
+                dest_pt = await geocode_city(self.db, self.destination_name)
+        except GeocodeError as exc:
+            return {"originQuery": self.origin_name, "transport": transport, "note": str(exc)}
+
+        origin = _leg_point(origin_pt)
+        destination = _leg_point(dest_pt)
+
+        # Honour the same feasibility guard the manual route planner enforces, so we never
+        # render a confident ETA for an impossible leg (intercity metro, a too-short flight).
+        reason = await check_leg_feasibility(origin, destination, transport)
+        if reason:
+            return {"origin": origin, "destination": destination, "transport": transport, "note": reason}
+
+        try:
+            route = await plan_route(
+                self.db, {"legs": [{"origin": origin, "destination": destination, "transport": transport}]}
+            )
+        except Exception:
+            logger.exception("getting-there route computation failed")
+            return {"origin": origin, "destination": destination, "transport": transport,
+                    "note": "Couldn't compute the route there right now."}
+
+        # The first (only) leg carries any resolved train number/name + scheduled times.
+        first_leg = (route.get("legs") or [{}])[0]
+        return {
+            "origin": origin,
+            "destination": destination,
+            "transport": transport,
+            "distanceKm": route.get("distanceKm"),
+            "durationHours": route.get("estimatedDurationHours"),
+            "departureTime": route.get("departureTime"),
+            "arrivalTime": route.get("arrivalTime"),
+            # Along-the-road refuel markers — only meaningful for self-driven petrol modes.
+            "fuelStops": route.get("fuelStops", []) if self.refuel_relevant else [],
+            "travelCost": leg_cost(transport, route.get("distanceKm", 0.0), self.people_count),
+            # Real train identity for a TRAIN leg (None for other modes / no match).
+            "trainNumber": first_leg.get("trainNumber"),
+            "trainName": first_leg.get("trainName"),
+            "scheduledDeparture": first_leg.get("scheduledDeparture"),
+            "scheduledArrival": first_leg.get("scheduledArrival"),
+            # Real flight identity for a FLIGHT leg (None for other modes / no match).
+            "flightNumber": first_leg.get("flightNumber"),
+            "airline": first_leg.get("airline"),
+            "fromAirport": first_leg.get("fromAirport"),
+            "toAirport": first_leg.get("toAirport"),
+            "priceText": first_leg.get("priceText"),
+            # Full route_planner output, so the card can draw the journey on a real map.
+            "route": route,
+            "note": leg_warning(origin, destination, transport),
+        }
 
     # ── Step 1: Load data ───────────────────────────────────────────────────
     async def _load_data(self):
@@ -350,13 +441,35 @@ class TripPlanner:
             select(Destination).where(Destination.name.ilike(f"%{self.destination_name}%"))
         )
         self.destination = result.scalar_one_or_none()
-        if not self.destination:
-            return
 
-        places_result = await self.db.execute(
-            select(Place).where(Place.destination_id == self.destination.id)
-        )
-        self.all_places = places_result.scalars().all()
+        if self.destination:
+            places_result = await self.db.execute(
+                select(Place).where(Place.destination_id == self.destination.id)
+            )
+            self.all_places = places_result.scalars().all()
+
+        # No synced catalogue for this city (unseeded destination, or a destination
+        # row with no places) → pull real cafés/restaurants/sights from OpenStreetMap
+        # so the itinerary names actual venues instead of generic filler.
+        if not self.all_places:
+            await self._load_live_places()
+
+    async def _load_live_places(self):
+        """Best-effort live OSM fetch around the destination's coordinates."""
+        lat = lng = None
+        if self.destination and self.destination.latitude is not None:
+            lat, lng = self.destination.latitude, self.destination.longitude
+        else:
+            try:
+                pt = await geocode_city(self.db, self.destination_name)
+                lat, lng = pt["latitude"], pt["longitude"]
+            except GeocodeError:
+                return
+        if lat is None or lng is None:
+            return
+        data = await fetch_live_pois(lat, lng)
+        self.live_sights = data.get("sights", [])
+        self.live_food = data.get("food", [])
 
     # ── Step 2: Personalized place scoring ──────────────────────────────────
     def _score_places(self):
@@ -404,6 +517,29 @@ class TripPlanner:
                 },
             })
 
+        # Live OSM sights — no ratings to score on, so they sit on a modest baseline
+        # nudged by how well their type matches the traveller's styles. getattr keeps
+        # this safe for tests that build a planner via __new__ without these fields.
+        for s in getattr(self, "live_sights", []):
+            style_score = self._style_match(s["type"], self.travel_styles)
+            self.scored_places.append({
+                "score": round(40 + style_score * 0.5, 2),
+                "style_match": round(style_score, 2),
+                "place": {
+                    "id": s["id"],
+                    "name": s["name"],
+                    "type": s["type"],
+                    "latitude": s["latitude"],
+                    "longitude": s["longitude"],
+                    "external_rating": None,
+                    "tripova_score": None,
+                    "phone": s.get("phone"),
+                    "address": s.get("address"),
+                    "tags": None,
+                    "source": "osm",
+                },
+            })
+
         self.scored_places.sort(key=lambda x: x["score"], reverse=True)
 
     # ── Step 3: Diet-aware food scoring ─────────────────────────────────────
@@ -437,6 +573,35 @@ class TripPlanner:
                     "phone": p.phone,
                     "address": p.address,
                     "price_range": p.price_range,
+                },
+            })
+
+        # Live OSM cafés/restaurants — score on diet match against the OSM cuisine
+        # tag (the only honest signal we have) over a small baseline. getattr keeps
+        # this safe for tests that build a planner via __new__ without these fields.
+        for f in getattr(self, "live_food", []):
+            diet_tags = f.get("diet_tags") or []
+            diet_bonus = 0
+            if self.diet_preferences:
+                matches = sum(1 for d in self.diet_preferences if d in diet_tags)
+                diet_bonus = (matches / len(self.diet_preferences)) * 40
+            self.scored_food.append({
+                "score": round(20 + diet_bonus, 2),
+                "diet_bonus": round(diet_bonus, 2),
+                "place": {
+                    "id": f["id"],
+                    "name": f["name"],
+                    "type": f["type"],
+                    "diet_tags": diet_tags,
+                    "external_rating": None,
+                    "latitude": f["latitude"],
+                    "longitude": f["longitude"],
+                    "phone": f.get("phone"),
+                    "address": f.get("address"),
+                    "price_range": None,
+                    # The local speciality, when OSM names a cuisine — shown to travellers.
+                    "cuisine": f.get("cuisine"),
+                    "source": "osm",
                 },
             })
 
@@ -494,6 +659,22 @@ class TripPlanner:
             return pool[i]
         return None
 
+    @staticmethod
+    def _food_label(entry: dict | None) -> str | None:
+        """A food spot's display name, with its OSM cuisine (local speciality) appended
+        when we have one — e.g. 'Sarafa Bazaar Cafe (South Indian)'."""
+        if not entry:
+            return None
+        place = entry.get("place", {})
+        name = place.get("name")
+        if not name:
+            return None
+        cuisine = place.get("cuisine")
+        if cuisine:
+            pretty = cuisine.replace("_", " ").replace(";", ", ").title()
+            return f"{name} ({pretty})"
+        return name
+
     def _build_day_slots(self, archetype: str, day: int, places: list[dict], foods: list[dict]) -> dict:
         slots = {}
 
@@ -502,7 +683,7 @@ class TripPlanner:
         slots["morning"] = {
             "activity": f"Breakfast + {morning_name}",
             "place_type": places[0]["place"]["type"] if places else "explore",
-            "food_match": foods[0]["place"]["name"] if foods and foods[0] else "Local café",
+            "food_match": self._food_label(foods[0]) if foods and foods[0] else "Local café",
             "budget_share": "25%",
         }
 
@@ -523,7 +704,7 @@ class TripPlanner:
             }
 
         # Evening — food + wind down
-        evening_food = foods[-1]["place"]["name"] if foods and foods[-1] else "Local dining"
+        evening_food = self._food_label(foods[-1]) if foods and foods[-1] else "Local dining"
         slots["evening"] = {
             "activity": f"Dinner at {evening_food}",
             "food_match": evening_food,

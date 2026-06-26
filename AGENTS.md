@@ -192,7 +192,7 @@ API responses should show score breakdown where possible.
 
 ### 9. Use shared error classes
 
-Raise exceptions from `app/shared/errors.py` (e.g., `NotFoundException`, `UnauthorizedException`, `ValidationException`) instead of raw `HTTPException`. This keeps error responses consistent and the API predictable.
+Raise exceptions from `app/shared/errors.py` (`NotFoundError`, `UnauthorizedError`, `ForbiddenError`, `BadRequestError`, `ConflictError`, `ValidationException`, `ServiceUnavailableError`) instead of raw `HTTPException`. This keeps error responses consistent and the API predictable.
 
 ### 10. Pydantic v2 style
 
@@ -259,6 +259,58 @@ Sentiment score is integrated into both:
 - The tripova place ranking formula (10% weight)
 - The deep review endpoint response
 
+### 16. BMTC Transit module — third-party API rules
+
+The BMTC transit module (`backend/app/modules/transit/`) uses a reverse-engineered API from `bmtcmobileapp.karnataka.gov.in`. Follow these rules:
+
+- Do **not** put excessive load on BMTC servers. Search results are cached (120s TTL in-process).
+- The provider uses `httpx.AsyncClient` with 15s timeout. All endpoints are POST.
+- The upstream API is unreliable (govt service). All endpoints must handle `BMTCApiError` gracefully — show clear error messages, never crash.
+- The transit module is Bengaluru-only. Extending to other cities requires a new provider (e.g. `delhi_transport_provider.py`).
+- Transit has no database models — it's a pure proxy layer.
+
+### 17. Geo-lock rules
+
+The geo-lock module (`backend/app/shared/geolock.py`) restricts API access by IP geolocation:
+
+- Default: India-only (`IN`). Change via `GEO_LOCK_ALLOWED_COUNTRIES` in `.env`.
+- Uses `api.country.is` (free, no API key) with 1-hour in-memory cache.
+- Private IPs (10.x, 192.168.x, 127.x) return None — resolved by the middleware as "unknown location."
+- `GEO_LOCK_STRICT=false` allows unknown locations through; `true` blocks them.
+- Health check, docs, and root endpoints are always exempt.
+- Per-endpoint blocking available via `require_india_only` dependency.
+- For production, consider replacing `api.country.is` with a bundled GeoLite2 database.
+
+### 18. URL routing rules (frontend)
+
+The `app-provider.tsx` syncs `tab`, `sub`, and `dest` state to the browser URL:
+
+- On mount, read `?tab=`, `?sub=`, `?dest=` from `window.location.search`.
+- On state change, update URL via `window.history.replaceState` (not `pushState`) to avoid cluttering browser history.
+- Default tab "home" is stripped from the URL for cleanliness.
+- The `hydrated` flag gates URL writes to prevent SSR mismatch.
+- When adding new navigation dimensions, mirror the pattern: read in the mount effect, write in a sync effect.
+
+### 19. Water transport is paused
+
+FERRY and CRUISE transport profiles are temporarily suspended:
+
+- **Backend**: Profiles are commented out in `transport.py`. The `WATER` legacy alias maps to `TRAIN`.
+- **Frontend**: Removed from all `TRANSPORT_META` objects and `travelModes` arrays.
+- **Type**: `TransportKey` type excludes `FERRY | CRUISE` (kept as comments for quick un-pause).
+- Do **not** re-enable water transport until routing data (routes, schedules, fares, port locations) is available.
+- If re-enabling, restore in all places: `transport.py`, `types.ts`, `route-screen.tsx`, `journey-screen.tsx`, `plan-screen.tsx`.
+
+### 20. New feature modules must register in main.py and docs
+
+Every new module requires:
+1. A directory under `backend/app/modules/<name>/` with `__init__.py`
+2. Router imported and mounted in `backend/app/main.py`
+3. Entry added to `docs/PROJECT_STRUCTURE.md` (module table + router table)
+4. Test file added under `backend/tests/`
+5. If it has frontend screens: register imports + route case in `app-shell.tsx`
+6. If it has API types: add interfaces to `frontend/src/lib/types.ts`
+
 ## Files To Read Before Coding
 
 Before coding, read these files in order:
@@ -301,6 +353,11 @@ After coding:
 * Do not remove TripPod.
 * Do not remove sentiment analysis.
 * Do not create unused over-engineered microservices.
+* Do not remove offline strategy.
+* Do not remove PureFind.
+* Do not remove TrustScore.
+* Do not remove TripPod.
+* Do not remove sentiment analysis.
 
 ## Product Identity
 
@@ -315,3 +372,47 @@ Tripova should feel:
 * globally scalable
 
 The backend should support this product direction, not just generic CRUD.
+
+
+<!-- headroom:rtk-instructions -->
+# RTK (Rust Token Killer) - Token-Optimized Commands
+
+When running shell commands, **always prefix with `rtk`**. This reduces context
+usage by 60-90% with zero behavior change. If rtk has no filter for a command,
+it passes through unchanged — so it is always safe to use.
+
+## Key Commands
+```bash
+# Git (59-80% savings)
+rtk git status          rtk git diff            rtk git log
+
+# Files & Search (60-75% savings)
+rtk ls <path>           rtk read <file>         rtk grep <pattern>
+rtk find <pattern>      rtk diff <file>
+
+# Test (90-99% savings) — shows failures only
+rtk pytest tests/       rtk cargo test          rtk test <cmd>
+
+# Build & Lint (80-90% savings) — shows errors only
+rtk tsc                 rtk lint                rtk cargo build
+rtk prettier --check    rtk mypy                rtk ruff check
+
+# Analysis (70-90% savings)
+rtk err <cmd>           rtk log <file>          rtk json <file>
+rtk summary <cmd>       rtk deps                rtk env
+
+# GitHub (26-87% savings)
+rtk gh pr view <n>      rtk gh run list         rtk gh issue list
+
+# Infrastructure (85% savings)
+rtk docker ps           rtk kubectl get         rtk docker logs <c>
+
+# Package managers (70-90% savings)
+rtk pip list            rtk pnpm install        rtk npm run <script>
+```
+
+## Rules
+- In command chains, prefix each segment: `rtk git add . && rtk git commit -m "msg"`
+- For debugging, use raw command without rtk prefix
+- `rtk proxy <cmd>` runs command without filtering but tracks usage
+<!-- /headroom:rtk-instructions -->

@@ -6,6 +6,9 @@ from datetime import datetime
 
 class TripGenerateRequest(BaseModel):
     destination: str
+    # Where the traveller is starting from. Optional: when given we compute the real
+    # getting-there leg (route, fuel stops along the way, travel cost) for their mode.
+    origin: Optional[str] = None
     days: int
     budget: float
     peopleCount: int
@@ -28,6 +31,9 @@ class TripGenerateResponse(BaseModel):
     offlinePackSuggested: bool
     travelMode: str = "LAND"
     fuelStops: list = []  # populated only for self-driven petrol transports
+    # Present only when an `origin` was supplied: the getting-there leg (origin,
+    # destination, transport, distanceKm, durationHours, fuelStops, travelCost, note).
+    gettingThere: Optional[dict] = None
     aiGenerated: bool = False
     tripId: Optional[str] = None
 
@@ -95,6 +101,7 @@ class JourneyPlanRequest(BaseModel):
 
 
 class JourneyPlanResponse(BaseModel):
+    id: Optional[str] = None          # set when the journey was saved to history
     origin: dict
     destination: dict
     roundTrip: bool
@@ -107,6 +114,33 @@ class JourneyPlanResponse(BaseModel):
     route: dict                       # full route_planner output (legs, segments, stops…)
 
 
+class JourneyRecordResponse(BaseModel):
+    """A saved journey, including its status and (when ready) the full result."""
+    id: str
+    origin: str
+    destination: str
+    roundTrip: bool
+    peopleCount: int
+    budget: Optional[float] = None
+    status: str                       # pending | ready | failed
+    result: Optional[dict] = None
+    error: Optional[str] = None
+    createdAt: datetime
+
+
+class JourneyListItem(BaseModel):
+    """Lightweight history row (no full route payload)."""
+    id: str
+    origin: str
+    destination: str
+    roundTrip: bool
+    peopleCount: int
+    status: str
+    total: Optional[float] = None
+    chosenModes: list = []
+    createdAt: datetime
+
+
 class TripResponse(BaseModel):
     id: UUID
     user_id: UUID
@@ -116,8 +150,9 @@ class TripResponse(BaseModel):
     days: Optional[int] = None
     budget: Optional[float] = None
     people_count: Optional[int] = None
-    travel_style: Optional[dict] = None
-    diet_preference: Optional[dict] = None
+    # Stored as a list (e.g. ["nature"]) by the trip builder; older rows may hold a dict.
+    travel_style: Optional[list | dict] = None
+    diet_preference: Optional[list | dict] = None
     start_date: Optional[datetime] = None
     offline_required: bool
     generated_plan: Optional[dict] = None

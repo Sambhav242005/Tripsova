@@ -458,3 +458,71 @@ class TestEdgeCases:
 
         planner = TripPlanner(MockDB(), {"destination": ""})
         # Should not crash
+
+
+# ─── Getting there (origin → destination leg) ─────────────────────────────────
+
+def _planner_for_getting_there(origin: str, transport: str, refuel: bool = True):
+    """A bare planner wired just enough to exercise _plan_getting_there in isolation."""
+    p = TripPlanner.__new__(TripPlanner)
+    p.db = None
+    p.origin_name = origin
+    p.destination_name = "Ratlam"
+    p.destination = None
+    p.travel_mode = transport
+    p.refuel_relevant = refuel
+    p.people_count = 2
+    return p
+
+
+class TestGettingThere:
+    @pytest.mark.asyncio
+    async def test_no_origin_returns_none(self):
+        """No starting point → no getting-there leg (the field stays absent)."""
+        p = _planner_for_getting_there("", "CAR")
+        assert await p._plan_getting_there() is None
+
+    @pytest.mark.asyncio
+    async def test_impossible_mode_returns_note_not_eta(self, monkeypatch):
+        """A 100 km flight is impossible — we return an honest note, never a fake ETA."""
+        import app.modules.trips.ai_provider as ai
+
+        async def fake_geocode(_db, name):
+            coords = {
+                "indore": (22.7196, 75.8577),
+                "ratlam": (23.3315, 75.0367),
+            }[name.strip().lower()]
+            return {"name": name.title(), "latitude": coords[0], "longitude": coords[1], "source": "test"}
+
+        monkeypatch.setattr(ai, "geocode_city", fake_geocode)
+        p = _planner_for_getting_there("Indore", "FLIGHT", refuel=False)
+        result = await p._plan_getting_there()
+        assert result is not None
+        assert result["note"] and "fly" in result["note"].lower()
+        assert "distanceKm" not in result  # no route computed for an impossible leg
+
+    @pytest.mark.asyncio
+    async def test_feasible_drive_returns_route_and_cost(self, monkeypatch):
+        """A drivable leg returns the route summary, a travel cost, and fuel markers."""
+        import app.modules.trips.ai_provider as ai
+
+        async def fake_geocode(_db, name):
+            return {"name": name.title(), "latitude": 22.7, "longitude": 75.8, "source": "test"}
+
+        async def fake_plan_route(_db, _data):
+            return {
+                "distanceKm": 100.0,
+                "estimatedDurationHours": 2.0,
+                "departureTime": "2026-06-21T08:00:00",
+                "arrivalTime": "2026-06-21T10:00:00",
+                "fuelStops": [{"legIndex": 0, "atKm": 60.0, "location": {"latitude": 22.9, "longitude": 75.5}}],
+            }
+
+        monkeypatch.setattr(ai, "geocode_city", fake_geocode)
+        monkeypatch.setattr(ai, "plan_route", fake_plan_route)
+        p = _planner_for_getting_there("Indore", "CAR")
+        result = await p._plan_getting_there()
+        assert result["distanceKm"] == 100.0
+        assert result["transport"] == "CAR"
+        assert result["travelCost"] > 0
+        assert len(result["fuelStops"]) == 1

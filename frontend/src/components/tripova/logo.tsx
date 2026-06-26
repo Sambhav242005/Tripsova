@@ -9,7 +9,6 @@ export function LogoMark({ size = 32 }: { size?: number }) {
       width={size}
       height={size}
       alt=""
-      priority
       unoptimized
       style={{
         width: size,
@@ -55,7 +54,7 @@ export function Logo({
               fontSize: Math.max(8, Math.round(size * 0.26)),
               fontWeight: 700,
               letterSpacing: 0.5,
-              color: taglineColor || "#B0894A",
+              color: taglineColor || "#8A6A2E",
               marginTop: 3,
             }}
           >

@@ -14,7 +14,7 @@ function HubSection({ title, t, action, onAction, children }: { title: string; t
     <div style={{ marginBottom: 24 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 13 }}>
         <span style={{ fontSize: 11, fontWeight: 700, color: t.muted, letterSpacing: 1.5, textTransform: "uppercase" }}>{title}</span>
-        {action && <button onClick={onAction} style={{ background: "transparent", border: "none", color: t.secondary, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{action} ›</button>}
+        {action && onAction && <button onClick={onAction} style={{ background: "transparent", border: "none", color: t.secondary, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{action} ›</button>}
       </div>
       {children}
     </div>
@@ -108,20 +108,22 @@ function transformPost(p: FeedPostResponse): FeedPost {
   const diffHrs = Math.floor(diffMs / 3600000);
   const diffDays = Math.floor(diffMs / 86400000);
   const time = diffMins < 1 ? "just now" : diffHrs < 1 ? `${diffMins}m ago` : diffDays < 1 ? `${diffHrs}h ago` : `${diffDays}d ago`;
+  // API returns verification_score on a 0–1 scale; present it as a 0–100 TrustScore.
+  const score = p.verification_score <= 1 ? Math.round(p.verification_score * 100) : Math.round(p.verification_score);
   return {
     id: Number(p.id) || 0,
     user: p.user_name || "Traveller",
     avatar: p.user_avatar || "TR",
-    score: p.verification_score,
+    score,
     destId: p.destination_id || "",
-    location: p.destination_id || "Unknown",
+    location: p.destination_name || "",
     category: "General",
     time,
-    expiry: "",
+    expiry: null,
     content: p.content,
     helpful: p.helpful_count,
     comments: 0,
-    verified: p.verification_score >= 60,
+    verified: score >= 60,
     _apiId: p.id,
   };
 }
@@ -155,7 +157,9 @@ export function DestinationHub({ t, destId, openPureFind }: { t: Theme; destId: 
   const [saved, setSaved] = useState(false);
   const [following, setFollowing] = useState(false);
   const [posts, setPosts] = useState<FeedPost[]>([]);
+  const [postsLoading, setPostsLoading] = useState(true);
   const [rests, setRests] = useState<RestUI[]>([]);
+  const [restsLoading, setRestsLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -165,21 +169,22 @@ export function DestinationHub({ t, destId, openPureFind }: { t: Theme; destId: 
       setD(emptyDest(destId));
       setPosts([]);
       setRests([]);
+      setPostsLoading(true);
+      setRestsLoading(true);
     });
     api.get<DestinationResponse>(`/api/destinations/${destId}`)
       .then(res => {
         if (cancelled) return;
         startTransition(() => setD(toUIDest(res)));
-        // Pull the destination's real feed posts and verified food spots.
         api.get<PaginatedList<FeedPostResponse>>(`/api/feed?destination_id=${res.id}&per_page=3`)
-          .then(feed => { if (!cancelled) startTransition(() => setPosts(feed.items.map(transformPost))); })
-          .catch(() => {});
+          .then(feed => { if (!cancelled) startTransition(() => { setPosts(feed.items.map(transformPost)); setPostsLoading(false); }); })
+          .catch(() => { if (!cancelled) startTransition(() => setPostsLoading(false)); });
         api.get<FoodPlaceResponse[]>(`/api/food?destination_id=${res.id}`)
-          .then(food => { if (!cancelled) startTransition(() => setRests(food.slice(0, 3).map(transformFood))); })
-          .catch(() => {});
+          .then(food => { if (!cancelled) startTransition(() => { setRests(food.slice(0, 3).map(transformFood)); setRestsLoading(false); }); })
+          .catch(() => { if (!cancelled) startTransition(() => setRestsLoading(false)); });
       })
       .catch(() => {
-        if (!cancelled) startTransition(() => setError("Could not load live destination data"));
+        if (!cancelled) startTransition(() => { setError("Could not load destination data from the server."); setPostsLoading(false); setRestsLoading(false); });
       })
       .finally(() => {
         if (!cancelled) startTransition(() => setLoading(false));
@@ -241,16 +246,18 @@ export function DestinationHub({ t, destId, openPureFind }: { t: Theme; destId: 
         <PoweredBy t={t} style={{ marginBottom: 22 }} />
 
         <HubSection title="Live Traveller Feed" t={t}>
-          {posts.length > 0 ? (
+          {postsLoading ? (
+            <div style={{ height: 12, borderRadius: 6, background: t.tag, animation: "shimmer 1.5s ease-in-out infinite", backgroundImage: `linear-gradient(90deg,${t.tag},${t.bg2},${t.tag})`, backgroundSize: "200% 100%", marginBottom: 12 }} />
+          ) : posts.length > 0 ? (
             posts.map((p, i) => <PostCard key={p._apiId ?? p.id + "-" + i} post={p} t={t} />)
           ) : (
             <div style={{ background: t.card, borderRadius: 14, border: `1px solid ${t.border}`, padding: "20px 16px", textAlign: "center", fontSize: 13, color: t.muted }}>
-              No traveller updates here yet.
+              {error ? "Server unavailable — connect later for live traveller updates." : "No traveller updates here yet."}
             </div>
           )}
         </HubSection>
 
-        <HubSection title="PureFind · Verified Eats" t={t} action="Open PureFind" onAction={openPureFind}>
+        <HubSection title="PureFind · Verified Eats" t={t} action={rests.length > 0 ? "Open PureFind" : undefined} onAction={openPureFind}>
           {rests.length > 0 ? (
             rests.map((r, i) => (
               <div key={r.id + "-" + i} onClick={openPureFind} style={{ background: t.card, borderRadius: 14, border: `1px solid ${t.border}`, padding: 12, marginBottom: 10, display: "flex", gap: 12, cursor: "pointer", boxShadow: "0 1px 3px rgba(13,19,32,0.04)" }}>
@@ -258,7 +265,7 @@ export function DestinationHub({ t, destId, openPureFind }: { t: Theme; destId: 
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                     <div style={{ fontSize: 14.5, color: t.heading }}>{r.name}</div>
-                    <div style={{ fontSize: 12.5, fontWeight: 700, color: t.warning, display: "flex", alignItems: "center", gap: 3, flexShrink: 0 }}><Icon name="Star" size={11} color={t.warning} /> {r.rating}</div>
+                    {r.rating > 0 && <div style={{ fontSize: 12.5, fontWeight: 700, color: t.warning, display: "flex", alignItems: "center", gap: 3, flexShrink: 0 }}><Icon name="Star" size={11} color={t.warning} /> {r.rating}</div>}
                   </div>
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 7 }}>
                     {Object.entries(r.verifiedBy).slice(0, 2).map(([fid, c]) => <CommunityVerified key={fid} foodId={fid} count={c as number} t={t} />)}
@@ -266,9 +273,11 @@ export function DestinationHub({ t, destId, openPureFind }: { t: Theme; destId: 
                 </div>
               </div>
             ))
+          ) : restsLoading ? (
+            <div style={{ height: 12, borderRadius: 6, background: t.tag, animation: "shimmer 1.5s ease-in-out infinite", backgroundImage: `linear-gradient(90deg,${t.tag},${t.bg2},${t.tag})`, backgroundSize: "200% 100%" }} />
           ) : (
             <div style={{ background: t.card, borderRadius: 14, border: `1px solid ${t.border}`, padding: "20px 16px", textAlign: "center", fontSize: 13, color: t.muted }}>
-              No verified food spots here yet.
+              {error ? "Server unavailable — connect later for verified food spots." : "No verified food spots here yet."}
             </div>
           )}
         </HubSection>

@@ -19,4 +19,40 @@ export const ALL_FOOD_TYPES: FoodType[] = [
   { id: "everything", label: "Everything", emoji: "🌐", color: "#8A93A0", desc: "No restrictions" },
 ];
 
-export const getFI = (id: string) => ALL_FOOD_TYPES.find(f => f.id === id) || ALL_FOOD_TYPES[ALL_FOOD_TYPES.length - 1];
+// Maps a catalog chip id to the diet tag values the backend may store. Keeps the
+// frontend matching in sync with backend/app/shared/diet.py. Some seed tags use
+// alternate names (Sattvic data is stored as NO_ONION_GARLIC).
+const DIET_ALIASES: Record<string, string[]> = {
+  jain: ["JAIN"],
+  pure_veg: ["PURE_VEG", "PUREVEG", "VEG"],
+  vegan: ["VEGAN"],
+  veg_egg: ["VEG_EGG", "VEGEGG", "EGGETARIAN"],
+  halal: ["HALAL"],
+  gluten: ["GLUTEN", "GLUTEN_FREE", "GLUTENFREE"],
+  sattvic: ["SATTVIC", "NO_ONION_GARLIC"],
+  kosher: ["KOSHER"],
+  buddhist: ["BUDDHIST", "BUDDHIST_VEG"],
+};
+
+const normalizeTag = (tag: string) => (tag || "").trim().toUpperCase().replace(/[-\s]/g, "_");
+
+// Reverse map: any stored tag value -> catalog chip id (so badges resolve correctly).
+const TAG_TO_CHIP: Record<string, string> = Object.entries(DIET_ALIASES).reduce((acc, [chip, vals]) => {
+  vals.forEach(v => { acc[normalizeTag(v)] = chip; });
+  acc[normalizeTag(chip)] = chip;
+  return acc;
+}, {} as Record<string, string>);
+
+// Case- and alias-insensitive lookup — resolves "VEGAN", "no_onion_garlic", etc.
+// Falls back to the last entry ("Everything").
+export const getFI = (id: string) => {
+  const chip = TAG_TO_CHIP[normalizeTag(id)] || (id || "").toLowerCase();
+  return ALL_FOOD_TYPES.find(f => f.id === chip) || ALL_FOOD_TYPES[ALL_FOOD_TYPES.length - 1];
+};
+
+// True when a place's stored diet tags satisfy a selected chip (alias-aware).
+export const placeSupportsDiet = (placeTags: string[], chipId: string): boolean => {
+  const aliases = (DIET_ALIASES[chipId] || [chipId]).map(normalizeTag);
+  const have = new Set((placeTags || []).map(normalizeTag));
+  return aliases.some(a => have.has(a));
+};

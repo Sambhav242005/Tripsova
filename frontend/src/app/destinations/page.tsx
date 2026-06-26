@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getDestinations } from "@/lib/server-api";
+import { HomeCrumb } from "@/components/tripova/home-crumb";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://tripsova.com";
 
@@ -8,9 +9,9 @@ const C = {
   bg: "#FAF9F6",
   card: "#FFFFFF",
   navy: "#1B263B",
-  gold: "#B0894A",
+  gold: "#8A6A2E",
   text: "#2E2E2E",
-  muted: "#6E7681",
+  muted: "#636A75",
   border: "#E4E2DC",
   teal: "#5E8295",
 };
@@ -47,9 +48,7 @@ export default async function DestinationsIndexPage() {
     >
       <div style={{ maxWidth: 960, margin: "0 auto", padding: "40px 20px 80px" }}>
         <nav style={{ fontSize: 13, color: C.muted, marginBottom: 20 }}>
-          <Link href="/" style={{ color: C.muted, textDecoration: "none" }}>
-            Home
-          </Link>
+          <HomeCrumb color={C.muted} />
           {" / "}
           <span style={{ color: C.navy }}>Destinations</span>
         </nav>

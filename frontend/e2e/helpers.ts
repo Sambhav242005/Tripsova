@@ -184,30 +184,34 @@ export async function setupApp(
 }
 
 /**
- * The screen's submit button. It carries a ✦ so it's distinct from the "Plan My
- * Journey" *navigation* entries (drawer + profile), which matters on mobile where the
- * side drawer stays mounted in the DOM alongside the screen.
+ * The screen's submit button. It carries a ✦ so it's distinct from any plain
+ * "Plan My Journey" text elsewhere, which matters on mobile where the side drawer
+ * stays mounted in the DOM alongside the screen.
  */
 export function submitBtn(page: Page) {
   return page.getByRole("button", { name: "✦ Plan My Journey" });
 }
 
-/** Navigate to the Journey screen via the real UI path for the current viewport. */
+/**
+ * Navigate to the auto journey planner via the real UI path: the single "Plan a trip"
+ * hub → its "Getting there" step (where the auto planner is the default mode). The four
+ * old planning tools were merged into this one hub, so there's no longer a direct
+ * "Plan My Journey" nav entry.
+ */
 export async function gotoJourney(page: Page) {
   const isMobile = (page.viewportSize()?.width ?? 1280) < 768;
-  await page.goto("/app");
+  await page.goto("/");
 
-  // The nav entries are the exact label (no ✦); use exact match so they never collide
-  // with the screen's submit button.
-  const navEntry = page.getByRole("button", { name: "Plan My Journey", exact: true });
-  if (isMobile) {
-    await page.getByRole("button", { name: "Menu" }).click();
-    await navEntry.click();
-  } else {
-    await page.getByRole("button", { name: "Profile" }).first().click();
-    await navEntry.first().click();
-  }
+  // Open the "Plan a trip" hub. On mobile it lives in the drawer; on desktop it's the
+  // sidebar hero CTA. Both share the name with the home hero, so take the first match
+  // (nav chrome precedes page content in the DOM).
+  if (isMobile) await page.getByRole("button", { name: "Menu" }).click();
+  await page.getByRole("button", { name: "Plan a trip", exact: true }).first().click();
 
-  // The intro header confirms we arrived (no apostrophe → no quote-matching surprises).
-  await expect(page.getByText("We pick the transport", { exact: false })).toBeVisible();
+  // The hub opens on "Itinerary"; switch to the transport step.
+  await page.getByRole("tab", { name: "Getting there" }).click();
+
+  // The auto-mode hint confirms the journey planner is in view (no apostrophe → no
+  // quote-matching surprises; getByText is case-insensitive when not exact).
+  await expect(page.getByText("we pick the transport", { exact: false })).toBeVisible();
 }

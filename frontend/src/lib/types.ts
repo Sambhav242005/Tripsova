@@ -1,5 +1,33 @@
 // Backend API response types matching FastAPI Pydantic schemas
 
+// --- Budget ---
+export interface ExpenseResponse {
+  id: string;
+  description: string;
+  amount: number;
+  category?: string | null;
+  paid_by: string;
+  split: string[];
+  currency: string;
+  created_at: string;
+}
+
+export interface Settlement {
+  from: string;
+  to: string;
+  amount: number;
+}
+
+export interface BudgetSummary {
+  expenses: ExpenseResponse[];
+  members: string[];
+  total: number;
+  per_person: number;
+  balances: Record<string, number>;
+  settlements: Settlement[];
+  currency: string;
+}
+
 // --- Auth ---
 export interface RegisterRequest {
   name: string;
@@ -204,10 +232,25 @@ export interface FoodPlaceResponse {
   latitude?: number;
   longitude?: number;
   diet_tags?: string[];
+  tags?: string[];                 // descriptive cuisine/type tags (not a diet claim)
+  diet_source?: "community" | "suggested" | null;
   food_score: number;
   tripova_score: number;
   phone?: string;
   verified_count: number;
+  distance_km?: number;
+  photos?: string[];
+  source?: string;
+  is_community_verified: boolean;
+  is_diet_trusted: boolean;
+}
+
+export interface FoodDiscoverRequest {
+  lat: number;
+  lng: number;
+  radius_km?: number;
+  diet_tag?: string[];
+  destination_id?: string;
 }
 
 // --- Feed ---
@@ -242,11 +285,14 @@ export interface FeedPostResponse {
   created_at: string;
   user_name?: string;
   user_avatar?: string;
+  destination_name?: string;
 }
 
 // --- Trips ---
 export interface TripGenerateRequest {
   destination: string;
+  // Optional starting point; when set, the backend computes the getting-there leg.
+  origin?: string;
   days: number;
   budget: number;
   peopleCount: number;
@@ -261,7 +307,8 @@ export interface TripGenerateRequest {
 
 export type TransportKey =
   | "CAR" | "MOTORCYCLE" | "TRAIN" | "BUS" | "METRO"
-  | "BICYCLE" | "WALK" | "FLIGHT" | "FERRY" | "CRUISE";
+  | "BICYCLE" | "WALK" | "FLIGHT";
+  // FERRY | CRUISE — removed; water transport module on hold
 
 export interface RoutePoint { name: string; latitude: number; longitude: number; }
 export interface RouteLeg { origin: RoutePoint; destination: RoutePoint; transport: TransportKey; }
@@ -310,6 +357,7 @@ export interface JourneyGeoResolved {
 }
 
 export interface JourneyPlanResponse {
+  id?: string | null;             // set when the journey was saved to history
   origin: RoutePoint;
   destination: RoutePoint;
   roundTrip: boolean;
@@ -323,6 +371,33 @@ export interface JourneyPlanResponse {
   route: Record<string, unknown>;
 }
 
+export type JourneyStatus = "pending" | "ready" | "failed";
+
+export interface JourneyListItem {
+  id: string;
+  origin: string;
+  destination: string;
+  roundTrip: boolean;
+  peopleCount: number;
+  status: JourneyStatus;
+  total?: number | null;
+  chosenModes: TransportKey[];
+  createdAt: string;
+}
+
+export interface JourneyRecordResponse {
+  id: string;
+  origin: string;
+  destination: string;
+  roundTrip: boolean;
+  peopleCount: number;
+  budget?: number | null;
+  status: JourneyStatus;
+  result?: JourneyPlanResponse | null;
+  error?: string | null;
+  createdAt: string;
+}
+
 export interface TripGenerateResponse {
   summary: string;
   itinerary: Record<string, unknown>[];
@@ -333,8 +408,41 @@ export interface TripGenerateResponse {
   offlinePackSuggested: boolean;
   travelMode?: string;
   fuelStops?: Record<string, unknown>[];
+  gettingThere?: GettingThere | null;
   aiGenerated?: boolean;
   tripId?: string;
+}
+
+// The getting-there leg, present only when the trip request carried an `origin`.
+// On success it has the route fields; on failure it carries just a `note` (and maybe
+// origin/destination/transport) explaining why it couldn't be planned.
+export interface GettingThere {
+  origin?: RoutePoint;
+  destination?: RoutePoint;
+  transport?: TransportKey;
+  distanceKm?: number | null;
+  durationHours?: number | null;
+  departureTime?: string | null;
+  arrivalTime?: string | null;
+  fuelStops?: Record<string, unknown>[];
+  travelCost?: number | null;
+  // Real train identity for a TRAIN leg, from the datameet/railways dataset.
+  // scheduled* are present only when a direct timetable entry was matched.
+  trainNumber?: string | null;
+  trainName?: string | null;
+  scheduledDeparture?: string | null;
+  scheduledArrival?: string | null;
+  // Real flight identity for a FLIGHT leg, from the configured provider.
+  // Present only when a flight was matched; priceText is indicative.
+  flightNumber?: string | null;
+  airline?: string | null;
+  fromAirport?: string | null;
+  toAirport?: string | null;
+  priceText?: string | null;
+  // Full route_planner output (legs/segments/stops) for drawing the map.
+  route?: Record<string, unknown> | null;
+  note?: string | null;
+  originQuery?: string;
 }
 
 export interface TripResponse {
@@ -426,6 +534,21 @@ export interface TripPodResponse {
   created_at: string;
   updated_at: string;
   member_count?: number;
+  creator_name?: string;
+  creator_avatar?: string;
+  my_member_status?: "REQUESTED" | "APPROVED" | "REJECTED" | "LEFT" | string | null;
+  my_member_id?: string | null;
+  pending_request_count?: number;
+  pending_requests?: TripPodPendingRequest[];
+}
+
+export interface TripPodPendingRequest {
+  member_id: string;
+  user_id: string;
+  user_name: string;
+  user_avatar: string;
+  status: string;
+  created_at: string;
 }
 
 // --- Trust ---
@@ -500,6 +623,18 @@ export interface DeepReviewRequest {
   includeWeb?: boolean;
 }
 
+export interface RedditReview {
+  title: string;
+  snippet: string;
+  insight: string;
+  url: string;
+  /** "reddit" or, for open-web hits, the result's domain (e.g. "tripadvisor.com"). */
+  source?: string;
+  subreddit?: string;
+  sentiment: string;
+  createdDate?: string;
+}
+
 export interface DeepReviewResponse {
   overallSummary: string;
   positiveSignals: string[];
@@ -513,5 +648,92 @@ export interface DeepReviewResponse {
   sentimentMagnitude: number;
   confidenceScore: number;
   sourcesUsed: Record<string, unknown>[];
+  topReviews: RedditReview[];
   lastCheckedAt: string;
+}
+
+// --- Transit (BMTC / City Bus) ---
+export interface TransitRouteSuggestion {
+  route_id: number;
+  route_no: string;
+  route_name?: string | null;
+}
+
+export interface TransitStopSuggestion {
+  station_id: number;
+  station_name: string;
+  latitude: number;
+  longitude: number;
+}
+
+export interface TransitSearchResult {
+  query: string;
+  routes: TransitRouteSuggestion[];
+  stops: TransitStopSuggestion[];
+}
+
+export interface TransitLiveBus {
+  vehicle_id: number;
+  vehicle_number: string;
+  latitude: number;
+  longitude: number;
+  heading: number;
+  eta?: string | null;
+  service_type?: string | null;
+  last_refresh?: string | null;
+}
+
+export interface TransitRouteStation {
+  station_id: number;
+  station_name: string;
+  latitude: number;
+  longitude: number;
+}
+
+export interface TransitRouteDirection {
+  stations: TransitRouteStation[];
+  live_buses: TransitLiveBus[];
+}
+
+export interface TransitLiveRoute {
+  route_id: number;
+  route_no: string;
+  route_name: string;
+  up: TransitRouteDirection;
+  down?: TransitRouteDirection | null;
+  fetched_at: string;
+}
+
+export interface TransitVehicleTrack {
+  vehicle_id: number;
+  vehicle_number: string;
+  route_no: string;
+  latitude: number;
+  longitude: number;
+  current_stop?: string | null;
+  next_stop?: string | null;
+  heading: number;
+}
+
+export interface TransitVehicleTrip {
+  route_no: string;
+  vehicle_number: string;
+  stops: {
+    station_id?: number;
+    station_name?: string;
+    latitude?: number;
+    longitude?: number;
+    scheduled_arrival?: string;
+    actual_arrival?: string;
+    eta?: string;
+  }[];
+  live_location?: TransitVehicleTrack | null;
+}
+
+export interface TransitAllRoute {
+  route_id: number;
+  route_no: string;
+  route_name: string;
+  from_station: string;
+  to_station: string;
 }

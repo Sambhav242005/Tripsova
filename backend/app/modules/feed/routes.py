@@ -36,11 +36,20 @@ async def create_feed_post_endpoint(
     return FeedPostResponse.model_validate(post)
 
 @router.post("/{post_id}/helpful", response_model=dict)
-async def helpful_post(post_id: str, db: AsyncSession = Depends(get_db)):
+async def helpful_post(
+    post_id: str,
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    # Require auth so helpful/report counts can't be inflated by anonymous spam.
     await mark_helpful(db, post_id)
     return {"status": "ok"}
 
 @router.post("/{post_id}/report", response_model=dict)
-async def report_post_endpoint(post_id: str, db: AsyncSession = Depends(get_db)):
+async def report_post_endpoint(
+    post_id: str,
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
     await report_post(db, post_id)
     return {"status": "reported"}

@@ -1,23 +1,47 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import get_current_user_id
-from app.modules.food.schemas import FoodVerifyRequest, FoodVerificationResponse, FoodPlaceResponse
-from app.modules.food.service import search_food_places, verify_food, get_food_verifications
+from app.modules.data_sources.ingestion_service import enrich_food_places
+from app.modules.food.schemas import FoodVerifyRequest, FoodVerificationResponse, FoodPlaceResponse, FoodDiscoverRequest
+from app.modules.food.service import search_food_places, verify_food, get_food_verifications, discover_food_places
 
 router = APIRouter(prefix="/api/food", tags=["Food / PureFind"])
 
 @router.get("", response_model=list[FoodPlaceResponse])
 async def search_food(
     destination_id: str = Query(None),
-    diet_tag: str = Query(None),
+    diet_tag: list[str] = Query(None),
     lat: float = Query(None),
     lng: float = Query(None),
     radius: float = Query(None),
     db: AsyncSession = Depends(get_db),
 ):
-    places = await search_food_places(db, destination_id=destination_id, diet_tag=diet_tag, lat=lat, lng=lng, radius=radius)
+    places = await search_food_places(db, destination_id=destination_id, diet_tags=diet_tag, lat=lat, lng=lng, radius=radius)
+    return [FoodPlaceResponse.model_validate(p) for p in places]
+
+@router.post("/discover", response_model=list[FoodPlaceResponse])
+async def discover_food(
+    body: FoodDiscoverRequest,
+    background_tasks: BackgroundTasks,
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Find real restaurants/cafes near a coordinate, pulling fresh data from
+    OpenStreetMap when we don't already have enough cached nearby."""
+    radius_km = body.radius_km or 5.0
+    places = await discover_food_places(
+        db,
+        lat=body.lat,
+        lng=body.lng,
+        radius_km=radius_km,
+        diet_tags=body.diet_tag,
+        destination_id=str(body.destination_id) if body.destination_id else None,
+    )
+    # Diet inference (slow free-tier LLM) and address reverse-geocoding (rate-limited) run
+    # after responding, so this call stays fast; the next view shows the enriched data.
+    background_tasks.add_task(enrich_food_places, body.lat, body.lng, radius_km)
     return [FoodPlaceResponse.model_validate(p) for p in places]
 
 @router.post("/{place_id}/verify", status_code=201, response_model=FoodVerificationResponse)

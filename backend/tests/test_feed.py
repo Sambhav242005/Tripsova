@@ -30,7 +30,7 @@ class TestFeedPosts:
         )
         post_id = create_response.json()["id"]
 
-        helpful_response = await client.post(f"/api/feed/{post_id}/helpful")
+        helpful_response = await client.post(f"/api/feed/{post_id}/helpful", headers=user_headers)
 
         assert helpful_response.status_code == 200
         list_response = await client.get("/api/feed")

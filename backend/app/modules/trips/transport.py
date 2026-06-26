@@ -19,7 +19,7 @@ DEFAULT_FUEL_INTERVAL_KM = 450.0
 DEFAULT_TRANSPORT = "CAR"
 
 # Old coarse modes map onto a representative transport so existing callers keep working.
-LEGACY_MODE_ALIASES = {"LAND": "CAR", "AIR": "FLIGHT", "WATER": "FERRY"}
+LEGACY_MODE_ALIASES = {"LAND": "CAR", "AIR": "FLIGHT", "WATER": "TRAIN"}
 
 # Cost fields (rough INR estimates for travel in India, 2026):
 #   cost_per_km / base_fare  — fare model for that transport
@@ -36,8 +36,10 @@ TRANSPORT_PROFILES = {
     "BICYCLE":    {"medium": "LAND",  "speed_kmh": 15.0,  "route_factor": 1.30, "overhead_hours": 0.1,  "refuel": False, "overnight_rest": True,  "scheduled": False, "label": "Bicycle",      "icon": "🚲",  "cost_per_km": 0.0,  "base_fare": 0.0,    "per_vehicle": True,  "seats": 1},
     "WALK":       {"medium": "LAND",  "speed_kmh": 5.0,   "route_factor": 1.30, "overhead_hours": 0.0,  "refuel": False, "overnight_rest": True,  "scheduled": False, "label": "Walking",      "icon": "🚶",  "cost_per_km": 0.0,  "base_fare": 0.0,    "per_vehicle": True,  "seats": 1},
     "FLIGHT":     {"medium": "AIR",   "speed_kmh": 750.0, "route_factor": 1.05, "overhead_hours": 2.5,  "refuel": False, "overnight_rest": False, "scheduled": True,  "label": "Flight",       "icon": "✈️", "cost_per_km": 5.0,  "base_fare": 1800.0, "per_vehicle": False, "seats": 1},
-    "FERRY":      {"medium": "WATER", "speed_kmh": 35.0,  "route_factor": 1.15, "overhead_hours": 1.0,  "refuel": False, "overnight_rest": False, "scheduled": True,  "label": "Ferry",        "icon": "⛴️", "cost_per_km": 2.5,  "base_fare": 50.0,   "per_vehicle": False, "seats": 1},
-    "CRUISE":     {"medium": "WATER", "speed_kmh": 40.0,  "route_factor": 1.10, "overhead_hours": 1.5,  "refuel": False, "overnight_rest": False, "scheduled": True,  "label": "Cruise",       "icon": "🛳️", "cost_per_km": 10.0, "base_fare": 400.0,  "per_vehicle": False, "seats": 1},
+    # FERRY and CRUISE are temporarily paused — water transport module is on hold.
+    # Uncomment when water routing data (routes, schedules, fares) is available.
+    # "FERRY":      {"medium": "WATER", "speed_kmh": 35.0,  "route_factor": 1.15, "overhead_hours": 1.0,  "refuel": False, "overnight_rest": False, "scheduled": True,  "label": "Ferry",        "icon": "⛴️", "cost_per_km": 2.5,  "base_fare": 50.0,   "per_vehicle": False, "seats": 1},
+    # "CRUISE":     {"medium": "WATER", "speed_kmh": 40.0,  "route_factor": 1.10, "overhead_hours": 1.5,  "refuel": False, "overnight_rest": False, "scheduled": True,  "label": "Cruise",       "icon": "🛳️", "cost_per_km": 10.0, "base_fare": 400.0,  "per_vehicle": False, "seats": 1},
 }
 
 

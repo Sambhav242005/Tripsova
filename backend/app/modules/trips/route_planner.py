@@ -22,6 +22,8 @@ Backwards compatible: a request with a single {origin, destination, travelMode} 
 `legs`) still works and returns the original single-leg response shape.
 """
 
+import asyncio
+import logging
 from datetime import datetime, timedelta, timezone
 from math import asin, cos, radians, sin, sqrt
 from typing import Optional
@@ -31,11 +33,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.destinations.models import Destination
 from app.modules.places.models import Place
+from app.config import settings
+from app.modules.trips.flights import find_flight
+from app.modules.trips.railways import find_train, find_train_live
 from app.modules.trips.transport import (
     DEFAULT_FUEL_INTERVAL_KM,
     echo_mode,
     resolve_transport,
 )
+
+logger = logging.getLogger("tripsova.route")
 
 DAY_START_HOUR = 8    # resume driving in the morning
 DAY_END_HOUR = 20     # stop for the night by this hour
@@ -57,6 +64,31 @@ def _interpolate(origin: dict, destination: dict, fraction: float) -> dict:
         "latitude": round(origin["latitude"] + (destination["latitude"] - origin["latitude"]) * fraction, 5),
         "longitude": round(origin["longitude"] + (destination["longitude"] - origin["longitude"]) * fraction, 5),
     }
+
+
+def _anchor_to_schedule(start_dt: datetime, sched_dep: str, sched_arr: str):
+    """Anchor a scheduled leg to its real timetable.
+
+    Given the leg's earliest possible departure (``start_dt``) and the dataset's
+    real ``HH:MM`` departure/arrival, return ``(depart, arrive, duration_hours)``
+    where ``depart`` is the next occurrence of the scheduled departure on or after
+    ``start_dt`` and ``arrive`` follows the real run time (wrapping past midnight
+    for overnight services). Returns ``None`` if the times can't be parsed, so the
+    caller falls back to its distance estimate.
+    """
+    dparts, aparts = str(sched_dep).split(":"), str(sched_arr).split(":")
+    try:
+        dh, dm = int(dparts[0]), int(dparts[1])
+        ah, am = int(aparts[0]), int(aparts[1])
+    except (ValueError, IndexError):
+        return None
+    depart = start_dt.replace(hour=dh, minute=dm, second=0, microsecond=0)
+    if depart < start_dt:
+        depart += timedelta(days=1)  # today's train has gone — catch tomorrow's
+    dur_minutes = (ah * 60 + am) - (dh * 60 + dm)
+    if dur_minutes <= 0:
+        dur_minutes += 24 * 60  # arrives the next day
+    return depart, depart + timedelta(minutes=dur_minutes), dur_minutes / 60.0
 
 
 def _parse_departure(value) -> datetime:
@@ -178,10 +210,81 @@ async def _plan_leg(db, destinations, origin, destination, key, profile, start_d
         "distanceKm": round(distance_km, 1),
     }
 
+    # For a train leg, attach the real train (number/name + scheduled times when a
+    # direct timetable entry exists) from the vendored railways dataset. Best-effort:
+    # any failure or no match leaves the planner's estimate untouched.
+    if key == "TRAIN" and origin.get("latitude") is not None and destination.get("latitude") is not None:
+        train = None
+        try:
+            # Prefer *current* timetable data from eRail when enabled; the offline
+            # snapshot is the fallback (and the source when the flag is off).
+            if settings.TRAIN_LIVE_ENABLED:
+                # Pass the leg's wall-clock departure so the *next catchable* train is
+                # chosen, not one that has already departed for the day.
+                train = await find_train_live(
+                    origin["latitude"], origin["longitude"],
+                    destination["latitude"], destination["longitude"],
+                    after_minutes=start_dt.hour * 60 + start_dt.minute,
+                )
+            if train is None:
+                train = await asyncio.to_thread(
+                    find_train,
+                    origin["latitude"], origin["longitude"],
+                    destination["latitude"], destination["longitude"],
+                )
+        except Exception:
+            logger.exception("train lookup failed")
+            train = None
+        if train:
+            base_summary.update({
+                "trainNumber": train.get("trainNumber"),
+                "trainName": train.get("trainName"),
+                "scheduledDeparture": train.get("scheduledDeparture"),
+                "scheduledArrival": train.get("scheduledArrival"),
+                "fromStation": train.get("fromStation"),
+                "toStation": train.get("toStation"),
+            })
+
+    # For a flight leg, attach a real flight (number/airline + scheduled times and an
+    # indicative price) from the configured provider. Off unless FLIGHT_LIVE_ENABLED and
+    # a token is set; any failure or no match leaves the planner's estimate untouched.
+    if (key == "FLIGHT" and settings.FLIGHT_LIVE_ENABLED
+            and origin.get("latitude") is not None and destination.get("latitude") is not None):
+        try:
+            flight = await find_flight(
+                origin["latitude"], origin["longitude"],
+                destination["latitude"], destination["longitude"],
+                start_dt,
+            )
+        except Exception:
+            logger.exception("flight lookup failed")
+            flight = None
+        if flight:
+            base_summary.update({
+                "flightNumber": flight.get("flightNumber"),
+                "airline": flight.get("airline"),
+                "scheduledDeparture": flight.get("scheduledDeparture"),
+                "scheduledArrival": flight.get("scheduledArrival"),
+                "fromAirport": flight.get("fromAirport"),
+                "toAirport": flight.get("toAirport"),
+                "priceText": flight.get("priceText"),
+            })
+
     # ── Scheduled / onboard-sleep: a single continuous segment ───────────────
     if not profile["overnight_rest"]:
-        depart = start_dt
-        arrive = depart + timedelta(hours=travel_hours)
+        # When this is a train with real timetable times, run the leg's clock on
+        # the *scheduled* departure/arrival rather than the distance estimate — so
+        # the leg's "Departs/Arrives", its duration, and the scheduled badge all
+        # agree (and the next leg chains off the real arrival).
+        anchored = None
+        sched_dep, sched_arr = base_summary.get("scheduledDeparture"), base_summary.get("scheduledArrival")
+        if key in ("TRAIN", "FLIGHT") and sched_dep and sched_arr:
+            anchored = _anchor_to_schedule(start_dt, sched_dep, sched_arr)
+        if anchored:
+            depart, arrive, travel_hours = anchored
+        else:
+            depart = start_dt
+            arrive = depart + timedelta(hours=travel_hours)
         segment = {
             "legIndex": leg_index,
             "transport": key,

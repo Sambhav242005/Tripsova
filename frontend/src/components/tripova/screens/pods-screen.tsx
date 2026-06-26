@@ -22,6 +22,10 @@ const GRADIENTS = [
 
 const STYLES = ["Adventure", "Friends", "Cultural", "Relaxed", "Food", "Solo"];
 
+function stringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
+}
+
 function transformPod(p: TripPodResponse, idx: number) {
   const start = p.start_date ? new Date(p.start_date) : null;
   const end = p.end_date ? new Date(p.end_date) : null;
@@ -35,7 +39,6 @@ function transformPod(p: TripPodResponse, idx: number) {
   let dates = rawDates || "Flexible";
   if (start && end) dates = `${fmt(start)}–${fmt(end)}`;
   else if (start) dates = `${fmt(start)} onwards`;
-  const duration = start && end ? `${Math.ceil((end.getTime() - start.getTime()) / 86400000)} days` : "—";
   let travelStyle = Array.isArray(styleMeta) ? styleMeta[0] : typeof styleMeta === "string" ? styleMeta : null;
   if (!travelStyle) {
     const value = meta.style || meta.preference;
@@ -45,6 +48,11 @@ function transformPod(p: TripPodResponse, idx: number) {
   const destinationName = typeof meta.destination === "string" ? meta.destination : (p.title || "Untitled Pod");
   const people = typeof meta.people === "number" ? meta.people : (p.max_members || 1);
   const spots = Math.max(0, (p.max_members || 5) - (p.member_count || 0));
+  const durationDays = start && end ? Math.max(1, Math.floor((end.getTime() - start.getTime()) / 86400000) + 1) : null;
+  // The creator's own intro (stored as `note` at creation), not a canned line.
+  const customIntro = typeof meta.note === "string" && meta.note.trim() ? meta.note.trim() : null;
+  const interests = stringList(meta.interests || meta.sharedInterests || meta.shared_interests);
+  const groupFoods = stringList(meta.groupFoods || meta.group_foods || meta.dietPreference || meta.diet_preference);
   return {
     id: p.id,
     creatorId: p.creator_id,
@@ -55,24 +63,29 @@ function transformPod(p: TripPodResponse, idx: number) {
     budgetValue: p.budget,
     departure: p.start_date ? `${p.start_date.slice(0, 10)}T08:00` : undefined,
     dates,
-    duration,
-    budget: p.budget ? `₹${p.budget.toLocaleString("en-IN")}` : "₹—",
+    duration: durationDays ? `${durationDays} day${durationDays === 1 ? "" : "s"}` : "Flexible",
+    budget: p.budget ? `₹${p.budget.toLocaleString("en-IN")}` : "Budget flexible",
+    hasBudget: Boolean(p.budget),
     spots,
     size: p.max_members || 5,
-    host: "Trip host",
-    hostAvatar: (p.title || "Pod").slice(0, 2).toUpperCase(),
+    host: p.creator_name || "Trip host",
+    hostAvatar: p.creator_avatar || "TR",
     score: 0,
     podRating: 0,
     pastPods: 0,
     style: travelStyle || STYLES[idx % STYLES.length],
     verified: p.verification_required ?? false,
     compatibility: 0,
-    intro: "Join this trip and explore together with fellow travellers!",
+    intro: customIntro || "Join this trip and explore together with fellow travellers!",
     voice: "Say hi to the group",
-    interests: [],
+    interests,
     description: p.title || "",
     gradient: GRADIENTS[idx % GRADIENTS.length],
-    groupFoods: [],
+    groupFoods,
+    memberStatus: p.my_member_status || null,
+    memberId: p.my_member_id || null,
+    pendingRequestCount: p.pending_request_count || 0,
+    pendingRequests: p.pending_requests || [],
   };
 }
 
@@ -103,14 +116,16 @@ function SkeletonCard({ t }: { t: Theme }) {
 export function PodsScreen({ t, openJourney }: { t: Theme; openJourney?: (seed: Omit<JourneySeed, "key">) => void }) {
   const { user } = useAuth();
   const [tab, setTab] = useState("find");
-  const [joined, setJoined] = useState<Record<string, boolean>>({});
   const [apiItems, setApiItems] = useState<ReturnType<typeof transformPod>[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [podAction, setPodAction] = useState<Record<string, boolean>>({});
+  const [podMessage, setPodMessage] = useState<Record<string, string>>({});
+  const [memberAction, setMemberAction] = useState<Record<string, boolean>>({});
   const myInterests = ["Photography", "Food Exploration", "Hiking"];
 
-  const fetchPods = useCallback(async () => {
-    setLoading(true);
+  const fetchPods = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     setError(null);
     try {
       const res = await api.get<PaginatedList<TripPodResponse>>("/api/trippods?page=1&per_page=100");
@@ -119,7 +134,7 @@ export function PodsScreen({ t, openJourney }: { t: Theme; openJourney?: (seed: 
       setApiItems(null);
       setError(e instanceof ApiError ? "Couldn't load live pods." : "Failed to load pods");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
@@ -127,11 +142,41 @@ export function PodsScreen({ t, openJourney }: { t: Theme; openJourney?: (seed: 
 
   const displayPods = apiItems ?? [];
   const myPods = user ? displayPods.filter(pod => pod.creatorId === user.id) : [];
-  const visiblePods = tab === "mine" ? myPods : displayPods;
+  const visiblePods = tab === "mine" ? myPods : displayPods.filter(pod => !user || pod.creatorId !== user.id);
   const emptyTitle = tab === "mine" ? "No pods created yet" : "No pods matching your criteria";
   const emptyBody = tab === "mine"
     ? "Create a trip pod and it will appear here with its route details."
     : "Try different filters or create your own pod to attract companions.";
+
+  const requestJoin = async (podId: string) => {
+    setPodAction(a => ({ ...a, [podId]: true }));
+    setPodMessage(m => ({ ...m, [podId]: "" }));
+    try {
+      await api.post<{ status: string; member_id: string }>(`/api/trippods/${podId}/join-request`);
+      setPodMessage(m => ({ ...m, [podId]: "Request sent to the pod host." }));
+      await fetchPods(true);
+    } catch (e) {
+      setPodMessage(m => ({
+        ...m,
+        [podId]: e instanceof ApiError && e.status === 401 ? "Sign in again to request this pod." : e instanceof ApiError ? e.message : "Could not send request.",
+      }));
+    } finally {
+      setPodAction(a => ({ ...a, [podId]: false }));
+    }
+  };
+
+  const resolveRequest = async (podId: string, memberId: string, action: "approve" | "reject") => {
+    setMemberAction(a => ({ ...a, [memberId]: true }));
+    setPodMessage(m => ({ ...m, [podId]: "" }));
+    try {
+      await api.post<{ status: string; member_id: string }>(`/api/trippods/${podId}/${action}/${memberId}`);
+      await fetchPods(true);
+    } catch (e) {
+      setPodMessage(m => ({ ...m, [podId]: e instanceof ApiError ? e.message : "Could not update request." }));
+    } finally {
+      setMemberAction(a => ({ ...a, [memberId]: false }));
+    }
+  };
 
   return (
     <div style={{ padding: "16px 16px 16px" }}>
@@ -163,7 +208,7 @@ export function PodsScreen({ t, openJourney }: { t: Theme; openJourney?: (seed: 
           <Icon name="AlertCircle" size={16} />
           <span style={{ flex: 1 }}>{error}</span>
           <button
-            onClick={fetchPods}
+            onClick={() => fetchPods()}
             style={{ padding: "5px 12px", borderRadius: 6, border: "none", background: t.danger + "20", color: t.danger, cursor: "pointer", fontWeight: 600, fontSize: 12 }}
           >
             Retry
@@ -186,6 +231,8 @@ export function PodsScreen({ t, openJourney }: { t: Theme; openJourney?: (seed: 
 
       {!loading && visiblePods.map((rawPod, idx) => {
         const pod = rawPod;
+        const memberStatus = pod.memberStatus as string | null;
+        const isRequesting = Boolean(podAction[pod.id as string]);
         return (
         <div key={String(pod.id ?? idx)} style={{ background: t.card, borderRadius: 18, overflow: "hidden", marginBottom: 16, border: `1px solid ${t.border}`, boxShadow: "0 1px 3px rgba(13,19,32,0.04)" }}>
             <div style={{ height: 90, background: pod.gradient as string, position: "relative" }}>
@@ -233,19 +280,56 @@ export function PodsScreen({ t, openJourney }: { t: Theme; openJourney?: (seed: 
               <Icon name="Play" size={12} color={t.accent} /> {pod.voice as string}
             </span>
 
-            <div style={{ marginBottom: 13 }}>
-              <div style={{ fontSize: 10.5, fontWeight: 700, color: t.muted, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 7 }}>Shared Interests</div>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{(pod.interests as string[] || []).map((i: string) => <InterestChip key={i} label={i} t={t} shared={myInterests.includes(i)} />)}</div>
-            </div>
+            {(pod.interests as string[]).length > 0 && (
+              <div style={{ marginBottom: 13 }}>
+                <div style={{ fontSize: 10.5, fontWeight: 700, color: t.muted, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 7 }}>Shared Interests</div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{(pod.interests as string[]).map((i: string) => <InterestChip key={i} label={i} t={t} shared={myInterests.includes(i)} />)}</div>
+              </div>
+            )}
 
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 10.5, fontWeight: 700, color: t.muted, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 7 }}>Group Eats</div>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{(pod.groupFoods as string[] || []).map((id: string) => <FoodBadge key={id} id={id} small t={t} />)}</div>
-            </div>
+            {(pod.groupFoods as string[]).length > 0 && (
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 10.5, fontWeight: 700, color: t.muted, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 7 }}>Group Eats</div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{(pod.groupFoods as string[]).map((id: string) => <FoodBadge key={id} id={id} small t={t} />)}</div>
+              </div>
+            )}
+
+            {tab === "mine" && (pod.pendingRequests as TripPodResponse["pending_requests"] || []).length > 0 && (
+              <div style={{ border: `1px solid ${t.border}`, borderRadius: 12, padding: 12, background: t.tag, marginBottom: 14 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12, fontWeight: 800, color: t.heading, marginBottom: 10 }}>
+                  <Icon name="UserPlus" size={14} color={t.accent} /> Join Requests
+                </div>
+                {(pod.pendingRequests as NonNullable<TripPodResponse["pending_requests"]>).map(req => (
+                  <div key={req.member_id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderTop: `1px solid ${t.border}` }}>
+                    <Avatar initials={req.user_avatar} size={34} t={t} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: t.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{req.user_name}</div>
+                      <div style={{ fontSize: 11, color: t.muted }}>Wants to join this pod</div>
+                    </div>
+                    <button
+                      disabled={memberAction[req.member_id]}
+                      onClick={() => resolveRequest(pod.id as string, req.member_id, "reject")}
+                      style={{ padding: "7px 9px", borderRadius: 8, border: `1px solid ${t.border}`, background: t.card, color: t.muted, fontSize: 11.5, fontWeight: 700, cursor: memberAction[req.member_id] ? "default" : "pointer" }}
+                    >
+                      Reject
+                    </button>
+                    <button
+                      disabled={memberAction[req.member_id]}
+                      onClick={() => resolveRequest(pod.id as string, req.member_id, "approve")}
+                      style={{ padding: "7px 10px", borderRadius: 8, border: "none", background: t.success, color: "#fff", fontSize: 11.5, fontWeight: 800, cursor: memberAction[req.member_id] ? "default" : "pointer" }}
+                    >
+                      Accept
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 13, borderTop: `1px solid ${t.border}` }}>
               <div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: t.accent }}>{pod.budget as string}<span style={{ fontSize: 11, color: t.muted, fontWeight: 400 }}>/person</span></div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: t.accent }}>
+                  {pod.budget as string}{pod.hasBudget && <span style={{ fontSize: 11, color: t.muted, fontWeight: 400 }}>/person</span>}
+                </div>
                 <div style={{ fontSize: 11.5, color: (pod.spots as number) <= 1 ? t.danger : t.success, fontWeight: 700 }}>{(pod.spots as number)} of {pod.size as number} spots left</div>
               </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
@@ -281,19 +365,26 @@ export function PodsScreen({ t, openJourney }: { t: Theme; openJourney?: (seed: 
                   </button>
                 ) : (
                   <button
-                    onClick={() => setJoined(j => ({ ...j, [pod.id as string]: !j[pod.id as string] }))}
+                    disabled={isRequesting || memberStatus === "REQUESTED" || memberStatus === "APPROVED" || memberStatus === "REJECTED"}
+                    onClick={() => requestJoin(pod.id as string)}
                     style={{
                       padding: "10px 20px", borderRadius: 9, border: "none",
-                      background: joined[pod.id as string] ? t.success : `linear-gradient(135deg,${t.accent},${t.secondary})`,
-                      color: "#fff", fontSize: 13.5, fontWeight: 700, cursor: "pointer",
+                      background: memberStatus === "REJECTED" ? t.muted : memberStatus === "REQUESTED" || memberStatus === "APPROVED" ? t.success : `linear-gradient(135deg,${t.accent},${t.secondary})`,
+                      color: "#fff", fontSize: 13.5, fontWeight: 700, cursor: isRequesting || memberStatus === "REQUESTED" || memberStatus === "APPROVED" || memberStatus === "REJECTED" ? "default" : "pointer",
+                      opacity: isRequesting ? 0.75 : 1,
                       display: "flex", alignItems: "center", gap: 6,
                     }}
                   >
-                    {joined[pod.id as string] ? <><Icon name="Check" size={15} color="#fff" /> Requested</> : "Request to Join"}
+                    {isRequesting ? "Requesting…" : memberStatus === "APPROVED" ? <><Icon name="Check" size={15} color="#fff" /> Joined</> : memberStatus === "REQUESTED" ? <><Icon name="Check" size={15} color="#fff" /> Requested</> : memberStatus === "REJECTED" ? "Rejected" : "Request to Join"}
                   </button>
                 )}
               </div>
             </div>
+            {podMessage[pod.id as string] && (
+              <div style={{ marginTop: 10, fontSize: 12, color: podMessage[pod.id as string].includes("sent") ? t.success : t.danger }}>
+                {podMessage[pod.id as string]}
+              </div>
+            )}
           </div>
         </div>
         );

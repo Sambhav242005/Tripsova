@@ -8,7 +8,15 @@ import { Icon } from "../icon";
 import { TrustBadge, MultiSelectFood } from "../badges/index";
 import { api, isAuthenticated, ApiError } from "@/lib/api";
 import { useAuth } from "../auth/auth-context";
-import type { UserResponse, TrustScoreResponse, TripResponse, TripPodResponse, PaginatedList } from "@/lib/types";
+import type { UserResponse, TrustScoreResponse, TripResponse, TripPodResponse, PaginatedList, JourneyListItem, TransportKey } from "@/lib/types";
+
+// Compact mode glyphs for a journey's chosen transports (mirrors the journey screen).
+const TRANSPORT_ICON: Record<TransportKey, string> = {
+  CAR: "🚗", MOTORCYCLE: "🏍️", TRAIN: "🚆", BUS: "🚌",
+  METRO: "🚇", BICYCLE: "🚲", WALK: "🚶", FLIGHT: "✈️",
+};
+
+const inr = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
 
 function getInitials(name: string): string {
   return name
@@ -59,9 +67,11 @@ function parseTrustComponents(components: Record<string, unknown>, t: Theme): Tr
   return bars;
 }
 
-export function ProfileScreen({ t, lang, setLang, go }: { t: Theme; lang: string; setLang: (l: string) => void; go: (id: string) => void }) {
+export function ProfileScreen({ t, lang, setLang, go, openJourney }: { t: Theme; lang: string; setLang: (l: string) => void; go: (id: string) => void; openJourney?: (seed: { origin: string; destination: string; openJourneyId?: string }) => void }) {
   const { logout, refreshUser } = useAuth();
-  const [myFoods, setMyFoods] = useState(["jain", "pure_veg"]);
+  // Diet tags reflect only what the user has actually saved (populated from
+  // /api/users/me below) — never pre-select fabricated preferences.
+  const [myFoods, setMyFoods] = useState<string[]>([]);
   const [user, setUser] = useState<UserResponse | null>(null);
   const [trustScore, setTrustScore] = useState<TrustScoreResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -73,8 +83,14 @@ export function ProfileScreen({ t, lang, setLang, go }: { t: Theme; lang: string
   const [editAvatarUrl, setEditAvatarUrl] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [tripCount, setTripCount] = useState<number | null>(null);
   const [podCount, setPodCount] = useState<number | null>(null);
+  // AI Trip Builder results (the `trips` table) — both counted and listed.
+  const [trips, setTrips] = useState<TripResponse[] | null>(null);
+  // Saved "Plan My Journey" results — counted as a stat and listed below so they're
+  // reachable from the profile, not buried only inside the journey screen's history.
+  const [journeys, setJourneys] = useState<JourneyListItem[] | null>(null);
+  // Persisted-on-change status for the food preferences (they used to never save).
+  const [foodSaveState, setFoodSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -93,7 +109,9 @@ export function ProfileScreen({ t, lang, setLang, go }: { t: Theme; lang: string
         startTransition(() => {
           setUser(data);
           if (data.diet_preference && typeof data.diet_preference === "object") {
-            const extracted = Object.keys(data.diet_preference).filter((k) => data.diet_preference![k]);
+            const extracted = Object.keys(data.diet_preference)
+              .filter((k) => data.diet_preference![k])
+              .map((k) => k.toLowerCase());
             if (extracted.length > 0) setMyFoods(extracted);
           }
           setLoading(false);
@@ -124,21 +142,39 @@ export function ProfileScreen({ t, lang, setLang, go }: { t: Theme; lang: string
     Promise.all([
       api.get<TripResponse[]>("/api/trips/my").catch(() => [] as TripResponse[]),
       api.get<PaginatedList<TripPodResponse>>("/api/trippods?page=1&per_page=100").catch(() => null),
-    ]).then(([trips, pods]) => {
+      api.get<JourneyListItem[]>("/api/trips/journeys").catch(() => [] as JourneyListItem[]),
+    ]).then(([tripList, pods, journeyList]) => {
       if (cancelled) return;
-      setTripCount(trips.length);
+      setTrips(tripList);
       setPodCount((pods?.items || []).filter(pod => pod.creator_id === user.id).length);
+      setJourneys(journeyList);
     });
     return () => { cancelled = true; };
   }, [user]);
+
+  // Persist diet preferences the moment they change — previously this section only
+  // updated local state, so a refresh lost the selection ("not being saved"). The
+  // backend stores diet_preference as a {tag: true} map.
+  const updateFoods = async (foods: string[]) => {
+    setMyFoods(foods);
+    setFoodSaveState("saving");
+    try {
+      await api.put<UserResponse>("/api/users/me", {
+        diet_preference: Object.fromEntries(foods.map(f => [f, true])),
+      });
+      setFoodSaveState("saved");
+    } catch {
+      setFoodSaveState("error");
+    }
+  };
 
   const displayName = user?.name || "Traveller";
   const displayHandle = user?.name ? deriveHandle(user.name) : "";
   const displayAvatar = user?.name ? getInitials(user.name) : "TR";
   const displayTrust = user?.trust_score ?? 0;
   const stats = [
-    { label: "Trips", value: tripCount === null ? "..." : String(tripCount) },
-    { label: "Countries", value: "—" },
+    { label: "Trips", value: trips === null ? "..." : String(trips.length) },
+    { label: "Journeys", value: journeys === null ? "..." : String(journeys.length) },
     { label: "TripPods", value: podCount === null ? "..." : String(podCount) },
     { label: "Reviews", value: "—" },
   ];
@@ -243,7 +279,7 @@ export function ProfileScreen({ t, lang, setLang, go }: { t: Theme; lang: string
         <div style={{ height: 78, background: `linear-gradient(135deg,${t.accent},${t.secondary})` }} />
         <div style={{ padding: "0 16px 18px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 12, marginTop: -28 }}>
-            <div style={{ width: 66, height: 66, borderRadius: "50%", background: `linear-gradient(135deg,${t.accent},${t.secondary})`, border: `3px solid ${t.card}`, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 20, fontWeight: 700, flexShrink: 0 }}>{displayAvatar}</div>
+            <div style={{ width: 66, height: 66, borderRadius: "50%", background: `linear-gradient(135deg,${t.accent},${t.secondary})`, border: `3px solid ${t.card}`, display: "flex", alignItems: "center", justifyContent: "center", color: t.onAccent, fontSize: 20, fontWeight: 700, flexShrink: 0 }}>{displayAvatar}</div>
             <Btn outline t={t} small onClick={openEdit}>Edit Profile</Btn>
           </div>
           <div style={{ fontSize: 20, fontWeight: 700, color: t.text }}>{displayName}</div>
@@ -286,9 +322,87 @@ export function ProfileScreen({ t, lang, setLang, go }: { t: Theme; lang: string
         ))}
       </div>
 
+      {journeys && journeys.length > 0 && (
+        <Card t={t}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 14, fontWeight: 700, color: t.text }}>
+              <Icon name="Navigation" size={16} color={t.accent} /> My Journeys
+            </div>
+            <button onClick={() => go && go("journey")} style={{ background: "transparent", border: "none", color: t.accent, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Plan new →</button>
+          </div>
+          {journeys.slice(0, 5).map(j => {
+            const modes = (j.chosenModes || []).map(m => TRANSPORT_ICON[m] || "").filter(Boolean).join(" ");
+            const when = (() => { const d = new Date(j.createdAt); return isNaN(d.getTime()) ? "" : d.toLocaleDateString(undefined, { day: "numeric", month: "short" }); })();
+            return (
+              <button
+                key={j.id}
+                onClick={() => openJourney?.({ origin: j.origin, destination: j.destination, openJourneyId: j.id })}
+                disabled={!openJourney}
+                style={{ width: "100%", display: "flex", alignItems: "center", gap: 11, padding: "11px 4px", borderBottom: `1px solid ${t.border}`, background: "transparent", border: "none", cursor: openJourney ? "pointer" : "default", textAlign: "left" }}
+              >
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 600, color: t.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {j.origin} → {j.destination}{j.roundTrip ? " ↩" : ""}
+                  </div>
+                  <div style={{ fontSize: 11.5, color: t.muted, marginTop: 2, display: "flex", alignItems: "center", gap: 7 }}>
+                    {modes && <span>{modes}</span>}
+                    <span>{j.peopleCount} {j.peopleCount === 1 ? "traveller" : "travellers"}</span>
+                    {when && <span>· {when}</span>}
+                  </div>
+                </div>
+                <div style={{ textAlign: "right", flexShrink: 0 }}>
+                  {j.status === "ready" ? (
+                    typeof j.total === "number" ? <span style={{ fontSize: 13, fontWeight: 800, color: t.accent }}>{inr(j.total)}</span> : null
+                  ) : (
+                    <span style={{ fontSize: 10.5, fontWeight: 700, padding: "3px 8px", borderRadius: 999, background: t.tag, color: t.muted }}>
+                      {j.status === "pending" ? "Planning…" : "Failed"}
+                    </span>
+                  )}
+                  <div style={{ marginTop: 3 }}><Icon name="ChevronRight" size={14} color={t.muted} /></div>
+                </div>
+              </button>
+            );
+          })}
+        </Card>
+      )}
+
+      {trips && trips.length > 0 && (
+        <Card t={t}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 14, fontWeight: 700, color: t.text }}>
+              <Icon name="Sparkles" size={16} color={t.accent} /> My Trips
+            </div>
+            <button onClick={() => go && go("plan")} style={{ background: "transparent", border: "none", color: t.accent, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Build new →</button>
+          </div>
+          {trips.slice(0, 6).map(tr => {
+            const when = (() => { const d = new Date(tr.created_at); return isNaN(d.getTime()) ? "" : d.toLocaleDateString(undefined, { day: "numeric", month: "short" }); })();
+            return (
+              <div key={tr.id} style={{ display: "flex", alignItems: "center", gap: 11, padding: "11px 4px", borderBottom: `1px solid ${t.border}` }}>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 600, color: t.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {tr.title || "Trip plan"}
+                  </div>
+                  <div style={{ fontSize: 11.5, color: t.muted, marginTop: 2, display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
+                    {tr.trip_type && <span>{tr.trip_type}</span>}
+                    {tr.days != null && <span>· {tr.days} {tr.days === 1 ? "day" : "days"}</span>}
+                    {when && <span>· {when}</span>}
+                  </div>
+                </div>
+                {tr.budget != null && <span style={{ fontSize: 13, fontWeight: 800, color: t.accent, flexShrink: 0 }}>₹{Math.round(tr.budget).toLocaleString("en-IN")}</span>}
+              </div>
+            );
+          })}
+        </Card>
+      )}
+
       <Card t={t}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: t.text, marginBottom: 12 }}>🌿 My Food Preferences</div>
-        <MultiSelectFood selected={myFoods} onChange={setMyFoods} t={t} hint="Auto-applied in PureFind and Trip Builder" />
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 12 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: t.text }}>🌿 My Food Preferences</div>
+          {foodSaveState === "saving" && <span style={{ fontSize: 11, color: t.muted }}>Saving…</span>}
+          {foodSaveState === "saved" && <span style={{ fontSize: 11, color: t.success, fontWeight: 700 }}>✓ Saved</span>}
+          {foodSaveState === "error" && <span style={{ fontSize: 11, color: t.danger, fontWeight: 700 }}>Couldn’t save</span>}
+        </div>
+        <MultiSelectFood selected={myFoods} onChange={updateFoods} t={t} hint="Auto-applied in PureFind and Trip Builder" />
       </Card>
 
       <Card t={t}>
@@ -316,11 +430,13 @@ export function ProfileScreen({ t, lang, setLang, go }: { t: Theme; lang: string
       </Card>
 
       <Card t={t}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: t.text, marginBottom: 12 }}>🌍 Coming Soon — Global</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 14, fontWeight: 700, color: t.text, marginBottom: 12 }}>
+          <Icon name="Globe2" size={16} color={t.secondary} /> Coming Soon — Global
+        </div>
         {["Multi-currency & Stripe payments", "Nepal, Sri Lanka, Thailand, Dubai", "Kosher & Buddhist Veg expanded", "Offline maps v2 — Southeast Asia", "Arabic, Swahili, Thai localisation"].map(item => (
-          <div key={item} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: `1px solid ${t.border}` }}>
-            <span style={{ fontSize: 13, color: t.muted, fontStyle: "italic" }}>{item}</span>
-            <button style={{ padding: "4px 12px", borderRadius: 5, border: `1px solid ${t.border}`, background: "transparent", color: t.muted, fontSize: 11, cursor: "pointer", flexShrink: 0, marginLeft: 8 }}>Notify Me</button>
+          <div key={item} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: `1px solid ${t.border}` }}>
+            <span style={{ fontSize: 13, color: t.text, lineHeight: 1.35 }}>{item}</span>
+            <span style={{ padding: "4px 10px", borderRadius: 999, border: `1px solid ${t.border}`, background: t.tag, color: t.muted, fontSize: 11, fontWeight: 700, flexShrink: 0 }}>Planned</span>
           </div>
         ))}
       </Card>

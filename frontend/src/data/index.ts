@@ -1,6 +1,6 @@
 export { LIGHT, DARK } from "./theme";
 export type { Theme } from "./theme";
-export { ALL_FOOD_TYPES, getFI } from "./food";
+export { ALL_FOOD_TYPES, getFI, placeSupportsDiet } from "./food";
 export type { FoodType } from "./food";
 export type { Destination } from "./destinations";
 export {

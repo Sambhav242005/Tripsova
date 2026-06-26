@@ -41,14 +41,21 @@ export function LoginScreen({ t, onSwitch, onSuccess }: LoginScreenProps) {
         <h1 style={{ fontFamily: "var(--font-dm-serif), Georgia, serif", fontSize: 30, fontWeight: 400, color: t.heading, margin: "12px 0 4px" }}>Tripsova</h1>
         <p style={{ fontSize: 13, color: t.muted, margin: 0 }}>Discover through people — sign in to continue</p>
       </div>
-      <form onSubmit={handleSubmit}>
+      {/* method="post" so that if the form is submitted before React has
+          hydrated (slow/broken dev server, JS error), the browser's native
+          fallback sends credentials in the request body — never in the URL
+          query string as a GET would. handleSubmit still intercepts normally. */}
+      <form method="post" onSubmit={handleSubmit}>
         {(localError || error) && (
           <div style={{ background: t.danger + "14", border: `1px solid ${t.danger}40`, borderRadius: 10, padding: "10px 14px", marginBottom: 16, fontSize: 13, color: t.danger }}>{localError || error}</div>
         )}
         <div style={{ marginBottom: 14 }}>
-          <label style={{ fontSize: 12, fontWeight: 600, color: t.muted, marginBottom: 5, display: "block" }}>Email</label>
+          <label htmlFor="login-email" style={{ fontSize: 12, fontWeight: 600, color: t.muted, marginBottom: 5, display: "block" }}>Email</label>
           <input
+            id="login-email"
+            name="email"
             type="email"
+            autoComplete="email"
             value={email}
             onChange={e => setEmail(e.target.value)}
             placeholder="you@email.com"
@@ -57,9 +64,12 @@ export function LoginScreen({ t, onSwitch, onSuccess }: LoginScreenProps) {
           />
         </div>
         <div style={{ marginBottom: 22 }}>
-          <label style={{ fontSize: 12, fontWeight: 600, color: t.muted, marginBottom: 5, display: "block" }}>Password</label>
+          <label htmlFor="login-password" style={{ fontSize: 12, fontWeight: 600, color: t.muted, marginBottom: 5, display: "block" }}>Password</label>
           <input
+            id="login-password"
+            name="password"
             type="password"
+            autoComplete="current-password"
             value={password}
             onChange={e => setPassword(e.target.value)}
             placeholder="••••••••"

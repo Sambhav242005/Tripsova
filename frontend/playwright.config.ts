@@ -38,10 +38,11 @@ export default defineConfig({
   ],
   webServer: {
     command: "npm run dev",
-    url: "http://localhost:3000/app",
+    url: "http://localhost:3000/welcome",
     reuseExistingServer: true,
-    // Fail fast: if the server isn't serving /app (200) within 60s something is wrong
-    // (e.g. wrong workspace root) — bail instead of churning workers for two minutes.
+    // Fail fast: if the server isn't serving the public /welcome page (200) within 60s
+    // something is wrong (e.g. wrong workspace root) — bail instead of churning workers
+    // for two minutes. (The old /app route was removed when screens became real routes.)
     timeout: 60_000,
     gracefulShutdown: { signal: "SIGTERM", timeout: 5_000 },
     // Point the API client at the app's own origin so every fetch is same-origin and

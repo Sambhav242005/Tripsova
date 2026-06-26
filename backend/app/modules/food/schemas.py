@@ -33,6 +33,14 @@ class FoodSearchQuery(BaseModel):
     radius: Optional[float] = None
 
 
+class FoodDiscoverRequest(BaseModel):
+    lat: float
+    lng: float
+    radius_km: Optional[float] = 5.0
+    diet_tag: Optional[list[str]] = None
+    destination_id: Optional[UUID] = None
+
+
 class FoodPlaceResponse(BaseModel):
     id: UUID
     name: str
@@ -42,9 +50,16 @@ class FoodPlaceResponse(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     diet_tags: Optional[list] = None
+    tags: Optional[list] = None          # descriptive cuisine/type tags (never a diet claim)
+    diet_source: Optional[str] = None    # "community" | "suggested" | None
     food_score: float
     tripova_score: float
     phone: Optional[str] = None
     verified_count: int = 0
+    distance_km: Optional[float] = None
+    photos: Optional[list] = None
+    source: Optional[str] = None
+    is_community_verified: bool = False
+    is_diet_trusted: bool = False
 
     model_config = {"from_attributes": True}

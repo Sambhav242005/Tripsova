@@ -19,7 +19,7 @@ const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUserResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchMe = useCallback(async () => {
@@ -36,9 +36,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (getToken()) {
+      // Kick off the on-mount session restore; loading must flip true synchronously
+      // so the shell shows a spinner instead of a flash of logged-out UI.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLoading(true);
       fetchMe();
-    } else {
-      startTransition(() => setLoading(false));
     }
   }, [fetchMe]);
 

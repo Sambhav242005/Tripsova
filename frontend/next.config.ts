@@ -9,6 +9,13 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname,
   },
+  // Next blocks cross-origin requests to dev-only assets (incl. the HMR
+  // WebSocket) for any host not on its allowlist (`localhost` by default).
+  // Since the server binds to 0.0.0.0, loading the app via http://127.0.0.1:3000
+  // gets the HMR socket rejected (403 → ERR_INVALID_HTTP_RESPONSE), which wedges
+  // hydration and leaves pages as static HTML — forms then submit natively and
+  // leak credentials into the URL. Allow 127.0.0.1 so both hosts hydrate.
+  allowedDevOrigins: ["127.0.0.1"],
   async headers() {
     return [
       {

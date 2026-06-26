@@ -9,6 +9,7 @@ from app.config import settings
 from app.database import init_db, close_db
 from app.shared.rate_limit import RateLimitMiddleware
 from app.shared.request_logging import RequestLoggingMiddleware
+from app.shared.geolock import GeoLockMiddleware, GEO_RESOLVER
 
 logging.basicConfig(
     level=logging.DEBUG if settings.DEBUG else logging.INFO,
@@ -30,6 +31,8 @@ from app.modules.partners.routes import router as partners_router
 from app.modules.bookings.routes import router as bookings_router
 from app.modules.admin.routes import router as admin_router
 from app.modules.data_sources.routes import router as datasources_router
+from app.modules.transit.routes import router as transit_router
+from app.modules.budget.routes import router as budget_router
 
 
 @asynccontextmanager
@@ -37,6 +40,8 @@ async def lifespan(app: FastAPI):
     await init_db()
     yield
     await close_db()
+    if GEO_RESOLVER is not None:
+        await GEO_RESOLVER.close()
 
 
 app = FastAPI(
@@ -50,6 +55,8 @@ app = FastAPI(
 app.add_middleware(RateLimitMiddleware)
 
 app.add_middleware(RequestLoggingMiddleware)
+
+app.add_middleware(GeoLockMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -97,3 +104,5 @@ app.include_router(partners_router)
 app.include_router(bookings_router)
 app.include_router(admin_router)
 app.include_router(datasources_router)
+app.include_router(transit_router)
+app.include_router(budget_router)

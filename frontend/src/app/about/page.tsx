@@ -123,7 +123,7 @@ export default function AboutPage() {
           </ul>
           <div style={{ marginTop: 22 }}>
             <Link
-              href="/app"
+              href="/login"
               style={{
                 display: "inline-block",
                 background: C.goldFill,

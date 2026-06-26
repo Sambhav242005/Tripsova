@@ -42,19 +42,42 @@ export function mapDestination(d: DestinationResponse, idx: number): Destination
   };
 }
 
+// Module-level cache keyed by perPage. Dedupes the many useDestinations() callers
+// (home, discover, plan…) plus React StrictMode's double-invoke into a single
+// network request, and serves fresh results for a short TTL.
+const CACHE_TTL = 30_000; // 30s
+const destCache = new Map<number, { data: DestinationResponse[]; ts: number }>();
+const destInflight = new Map<number, Promise<DestinationResponse[]>>();
+
+function fetchDestinations(perPage: number, force: boolean): Promise<DestinationResponse[]> {
+  if (!force) {
+    const cached = destCache.get(perPage);
+    if (cached && Date.now() - cached.ts < CACHE_TTL) return Promise.resolve(cached.data);
+    const pending = destInflight.get(perPage);
+    if (pending) return pending;
+  }
+  const p = api
+    .get<PaginatedList<DestinationResponse>>(`/api/destinations?page=1&per_page=${perPage}`)
+    .then((res) => {
+      destCache.set(perPage, { data: res.items, ts: Date.now() });
+      return res.items;
+    })
+    .finally(() => { destInflight.delete(perPage); });
+  destInflight.set(perPage, p);
+  return p;
+}
+
 export function useDestinations(perPage = 20) {
   const [destinations, setDestinations] = useState<Destination[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const reload = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (force: boolean) => {
     setError(null);
+    setLoading(true);
     try {
-      const res = await api.get<PaginatedList<DestinationResponse>>(
-        `/api/destinations?page=1&per_page=${perPage}`
-      );
-      setDestinations(res.items.map((d, i) => mapDestination(d, i)));
+      const items = await fetchDestinations(perPage, force);
+      setDestinations(items.map((d, i) => mapDestination(d, i)));
     } catch {
       setError("Could not load destinations");
     } finally {
@@ -62,9 +85,12 @@ export function useDestinations(perPage = 20) {
     }
   }, [perPage]);
 
+  // Explicit retry bypasses the cache for a fresh fetch.
+  const reload = useCallback(() => load(true), [load]);
+
   useEffect(() => {
-    startTransition(() => { reload(); });
-  }, [reload]);
+    startTransition(() => { load(false); });
+  }, [load]);
 
   return { destinations, loading, error, reload };
 }

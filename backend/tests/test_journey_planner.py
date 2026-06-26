@@ -2,6 +2,7 @@ import pytest
 
 from app.modules.trips import journey_planner
 from app.modules.trips.journey_planner import choose_legs, plan_journey
+from app.modules.trips.route_planner import haversine_km
 from app.modules.trips.transport import leg_cost
 
 # Real-ish coordinates used across the cases.
@@ -10,21 +11,70 @@ MUMBAI = {"name": "Mumbai", "latitude": 19.0760, "longitude": 72.8777, "source":
 INDORE = {"name": "Indore", "latitude": 22.7196, "longitude": 75.8577, "source": "nominatim"}
 DELHI = {"name": "Delhi", "latitude": 28.6139, "longitude": 77.2090, "source": "db"}
 
+# Fake OSM hubs so the planner never hits the live Overpass network in tests. Each is a
+# real hub placed near its city; the fake lookup returns the nearest one with distanceKm
+# attached, exactly like the live hubs module does.
+_FAKE_STATIONS = [
+    {"name": "Ratlam Junction (RTM)", "latitude": 23.3300, "longitude": 75.0400},
+    {"name": "Mumbai Central (MMCT)", "latitude": 18.9696, "longitude": 72.8194},
+    {"name": "Indore Junction (INDB)", "latitude": 22.7180, "longitude": 75.8650},
+]
+_FAKE_AIRPORTS = [
+    {"name": "Indira Gandhi International Airport (DEL)", "latitude": 28.5562, "longitude": 77.1000},
+    {"name": "Chhatrapati Shivaji Maharaj International Airport (BOM)", "latitude": 19.0896, "longitude": 72.8656},
+]
+
+
+def _nearest_fake(catalog):
+    async def _lookup(point):
+        if point is None or point.get("latitude") is None:
+            return None
+        lat, lng = point["latitude"], point["longitude"]
+        best, best_km = None, None
+        for hub in catalog:
+            km = haversine_km(lat, lng, hub["latitude"], hub["longitude"])
+            if best_km is None or km < best_km:
+                best, best_km = hub, km
+        return {**best, "distanceKm": round(best_km, 1)}
+
+    return _lookup
+
+
+@pytest.fixture(autouse=True)
+def fake_hubs(monkeypatch):
+    """Patch the hub lookups so tests are deterministic and never touch the network."""
+    monkeypatch.setattr(journey_planner, "nearest_station", _nearest_fake(_FAKE_STATIONS))
+    monkeypatch.setattr(journey_planner, "nearest_airport", _nearest_fake(_FAKE_AIRPORTS))
+
 
 class TestChooseLegs:
-    def test_short_hop_picks_car(self):
+    async def test_short_hop_picks_car(self):
         # Ratlam -> Indore is ~100 km
-        legs = choose_legs(RATLAM, INDORE)
+        legs = await choose_legs(RATLAM, INDORE)
         assert [l["transport"] for l in legs] == ["CAR"]
 
-    def test_medium_hop_picks_train(self):
-        # Ratlam -> Mumbai is ~480 km straight line
-        legs = choose_legs(RATLAM, MUMBAI)
+    async def test_medium_hop_picks_train(self):
+        # Ratlam -> Mumbai is ~480 km straight line; both stations sit inside their
+        # cities (within HUB_SKIP_KM), so the access legs fall away → a single TRAIN leg.
+        legs = await choose_legs(RATLAM, MUMBAI)
         assert [l["transport"] for l in legs] == ["TRAIN"]
 
-    def test_long_hop_builds_drive_fly_drive(self):
+    async def test_train_leg_snaps_to_real_stations(self):
+        # The train leg should depart/arrive at named railway stations (with codes),
+        # not the bare city centres.
+        legs = await choose_legs(RATLAM, MUMBAI)
+        train = next(l for l in legs if l["transport"] == "TRAIN")
+        assert "(" in train["origin"]["name"] and ")" in train["origin"]["name"]
+        assert "(" in train["destination"]["name"] and ")" in train["destination"]["name"]
+        assert train["origin"]["name"].startswith("Ratlam")
+        # Endpoints are the station coordinates, not the original city coordinates.
+        assert (train["origin"]["latitude"], train["origin"]["longitude"]) != (
+            RATLAM["latitude"], RATLAM["longitude"],
+        )
+
+    async def test_long_hop_builds_drive_fly_drive(self):
         # Delhi -> Mumbai is ~1150 km → fly, with a drive to/from the nearest airport
-        legs = choose_legs(DELHI, MUMBAI)
+        legs = await choose_legs(DELHI, MUMBAI)
         modes = [l["transport"] for l in legs]
         assert "FLIGHT" in modes
         assert modes[0] == "CAR" or modes[0] == "FLIGHT"  # drive-in only if not already at airport

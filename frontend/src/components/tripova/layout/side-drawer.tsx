@@ -28,11 +28,10 @@ export function SideDrawer() {
     { id: "pods", icon: "Users", label: "TripPods" },
     { id: "profile", icon: "User", label: "Profile" },
   ];
+  // The four planning tools are now one "Plan a trip" hub (/plan); offline maps stays as
+  // a standalone utility. Matches the slimmed desktop sidebar.
   const manage = [
-    { id: "journey", icon: "Navigation", label: "Plan My Journey" },
-    { id: "plan", icon: "Sparkles", label: "AI Trip Builder" },
-    { id: "route", icon: "Route", label: "Route Planner" },
-    { id: "budget", icon: "Wallet", label: "Budget Tracker" },
+    { id: "plan", icon: "Compass", label: "Plan a trip" },
     { id: "maps", icon: "MapPinned", label: "Offline Maps" },
   ];
   const saved = (destinations ?? []).slice(0, 3);
@@ -103,7 +102,7 @@ export function SideDrawer() {
             <Row key={p.id} icon={p.icon} label={p.label} sel={active === p.id} on={() => { setTab(p.id); setDrawerOpen(false); scrollToTop(); }} />
           ))}
           <div style={{ height: 1, background: t.border, margin: "8px 12px" }} />
-          <Eyebrow t={t}>Travel Management</Eyebrow>
+          <Eyebrow t={t}>Plan your trip</Eyebrow>
           {manage.map(m => (
             <Row key={m.id} icon={m.icon} label={m.label} sel={active === m.id} on={() => { setSub(m.id); setDrawerOpen(false); scrollToTop(); }} />
           ))}

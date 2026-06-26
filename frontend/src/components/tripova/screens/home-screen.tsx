@@ -29,9 +29,9 @@ function SectionHeader({
       <div style={{ minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 6 }}>
           <span style={{ width: 16, height: 2, borderRadius: 2, background: t.goldFill }} />
-          <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1.4, textTransform: "uppercase", color: t.secondary }}>{eyebrow}</span>
+          <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1.4, textTransform: "uppercase", color: t.gold }}>{eyebrow}</span>
         </div>
-        <div style={{ fontFamily: "var(--font-dm-serif), Georgia, serif", fontSize: 23, color: t.heading, lineHeight: 1.1 }}>{title}</div>
+        <h2 style={{ fontFamily: "var(--font-dm-serif), Georgia, serif", fontSize: 23, fontWeight: 400, color: t.heading, lineHeight: 1.1, margin: 0 }}>{title}</h2>
         {subtitle && <div style={{ fontSize: 12.5, color: t.muted, marginTop: 4, lineHeight: 1.4 }}>{subtitle}</div>}
       </div>
       {action && (
@@ -131,7 +131,7 @@ function PostCard({ post, t, openDest }: { post: FeedPost; t: Theme; openDest?: 
               {post.verified && <Icon name="BadgeCheck" size={14} color={t.teal} />}
             </div>
             <div style={{ fontSize: 12, color: t.muted, display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>
-              <Icon name="MapPin" size={11} color={t.muted} /> {post.location} · {post.time}
+              {post.location ? <><Icon name="MapPin" size={11} color={t.muted} /> {post.location} · </> : null}{post.time}
             </div>
           </div>
         </div>
@@ -145,6 +145,7 @@ function PostCard({ post, t, openDest }: { post: FeedPost; t: Theme; openDest?: 
         }}>
           {post.category}
         </span>
+        {post.expiry ? (
         <span style={{
           display: "inline-flex", alignItems: "center", gap: 4,
           fontSize: 11, fontWeight: 600, color: t.muted,
@@ -152,6 +153,7 @@ function PostCard({ post, t, openDest }: { post: FeedPost; t: Theme; openDest?: 
         }}>
           <Icon name="Clock" size={11} color={t.muted} /> Expires in {post.expiry}
         </span>
+        ) : null}
       </div>
       <p style={{ fontSize: 14, color: t.text, lineHeight: 1.65, margin: "0 0 14px" }}>{post.content}</p>
       <div style={{ height: 1, background: `linear-gradient(90deg,${t.border},transparent)`, margin: "0 0 12px" }} />
@@ -250,9 +252,11 @@ function FoodPreview({ place, t, idx, onClick }: { place: FoodPlaceResponse; t: 
         )}
       </div>
       <div style={{ textAlign: "right", flexShrink: 0 }}>
-        <div style={{ fontSize: 13.5, fontWeight: 700, color: t.warning, display: "flex", alignItems: "center", gap: 3, justifyContent: "flex-end" }}>
-          <Icon name="Star" size={12} color={t.warning} /> {Math.round(place.food_score * 10) / 10}
-        </div>
+        {place.food_score > 0 && (
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: t.warning, display: "flex", alignItems: "center", gap: 3, justifyContent: "flex-end" }}>
+            <Icon name="Star" size={12} color={t.warning} /> {Math.round(place.food_score * 10) / 10}
+          </div>
+        )}
         {place.verified_count > 0 && <div style={{ fontSize: 10.5, color: t.success, marginTop: 2 }}>{place.verified_count} verified</div>}
       </div>
     </div>
@@ -268,32 +272,35 @@ function transformPost(p: FeedPostResponse) {
   const diffDays = Math.floor(diffMs / 86400000);
   const timeStr = diffMins < 1 ? 'just now' : diffHrs < 1 ? `${diffMins}m ago` : diffDays < 1 ? `${diffHrs}h ago` : `${diffDays}d ago`;
 
-  let expiryStr = 'N/A';
+  let expiryStr: string | null = null;
   if (p.expires_at) {
     const expDate = new Date(p.expires_at + 'Z');
     const expDays = Math.floor((expDate.getTime() - now.getTime()) / 86400000);
     expiryStr = expDays > 0 ? `${expDays} days` : 'Expiring';
   }
 
+  // The API returns verification_score on a 0–1 scale; present it as a 0–100 TrustScore.
+  const score = p.verification_score <= 1 ? Math.round(p.verification_score * 100) : Math.round(p.verification_score);
+
   return {
     id: Number(p.id),
     user: p.user_name || 'Traveller',
     avatar: p.user_avatar || 'TR',
-    score: p.verification_score,
+    score,
     destId: p.destination_id || '',
-    location: p.destination_id || 'Unknown',
+    location: p.destination_name || '',
     category: 'General',
     time: timeStr,
     expiry: expiryStr,
     content: p.content,
     helpful: p.helpful_count,
     comments: 0,
-    verified: p.verification_score >= 60,
+    verified: score >= 60,
     _apiId: p.id,
   };
 }
 
-export function HomeScreen({ t, openDest, openTab, createdPosts = [] }: { t: Theme; openDest: (id: string) => void; openTab?: (id: string) => void; createdPosts?: FeedPostResponse[] }) {
+export function HomeScreen({ t, openDest, openTab, openPlan, createdPosts = [] }: { t: Theme; openDest: (id: string) => void; openTab?: (id: string) => void; openPlan?: () => void; createdPosts?: FeedPostResponse[] }) {
   const [apiPosts, setApiPosts] = useState<FeedPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -330,13 +337,42 @@ export function HomeScreen({ t, openDest, openTab, createdPosts = [] }: { t: The
 
   return (
     <div style={{ padding: "12px 12px 16px" }}>
+      {/* ── Primary action — answers "what do I do first?" before the feed ── */}
+      {openPlan && (
+        <button
+          onClick={openPlan}
+          aria-label="Plan a trip"
+          style={{
+            position: "relative", overflow: "hidden", width: "100%", textAlign: "left",
+            display: "flex", alignItems: "center", gap: 14, cursor: "pointer",
+            border: `1px solid ${t.accent}33`, borderRadius: 22, padding: 18, marginBottom: 22,
+            background: `linear-gradient(135deg,${t.accent},${t.secondary})`,
+            boxShadow: `0 10px 30px ${t.accent}38`,
+          }}
+        >
+          {/* dashed orbit + soft disc echo the logo's flight-path mark */}
+          <span aria-hidden style={{ position: "absolute", right: -34, top: -34, width: 150, height: 150, borderRadius: "50%", border: "1.5px dashed rgba(255,255,255,0.22)" }} />
+          <span aria-hidden style={{ position: "absolute", right: 22, bottom: -22, width: 96, height: 96, borderRadius: "50%", background: "rgba(255,255,255,0.08)" }} />
+          <span style={{ width: 48, height: 48, borderRadius: 14, background: "rgba(255,255,255,0.18)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <Icon name="Compass" size={24} color={t.onAccent} />
+          </span>
+          <span style={{ flex: 1, minWidth: 0, position: "relative" }}>
+            <span style={{ display: "block", fontFamily: "var(--font-dm-serif), Georgia, serif", fontSize: 21, lineHeight: 1.15, color: t.onAccent }}>Where to next?</span>
+            <span style={{ display: "block", fontSize: 12.5, color: t.onAccent, opacity: 0.88, marginTop: 3, lineHeight: 1.4 }}>Itinerary, route &amp; budget — planned in one place.</span>
+          </span>
+          <span style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 5, background: t.onAccent, color: t.accent, borderRadius: 11, padding: "9px 14px", fontSize: 13, fontWeight: 800, position: "relative" }}>
+            Start <Icon name="ArrowRight" size={15} color={t.accent} />
+          </span>
+        </button>
+      )}
+
       {/* ───────────────────────── 1 · CityFeed ───────────────────────── */}
       <SectionHeader t={t} eyebrow="Your city · Live" title="CityFeed" subtitle="Fresh, time-sensitive updates from travellers around you." />
       <div style={{ marginBottom: 14, display: "flex", justifyContent: "flex-end" }}>
         <PoweredBy t={t} />
       </div>
 
-      {!loading && !error && (
+      {!loading && !error && feedItems.length > 0 && (
         <div style={{
           display: "flex", gap: 12, alignItems: "center",
           background: `linear-gradient(135deg,${t.accent}12,${t.secondary}0A)`,
@@ -346,14 +382,14 @@ export function HomeScreen({ t, openDest, openTab, createdPosts = [] }: { t: The
           marginBottom: 12,
         }}>
           <div style={{ width: 42, height: 42, borderRadius: 12, background: t.card, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <Icon name={feedItems.length > 0 ? "Radio" : "MessageCirclePlus"} size={20} color={t.accent} />
+            <Icon name="Radio" size={20} color={t.accent} />
           </div>
           <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ fontSize: 14, fontWeight: 800, color: t.heading }}>
-              {feedItems.length > 0 ? `${feedItems.length} live traveller update${feedItems.length === 1 ? "" : "s"}` : "CityFeed is waiting for first posts"}
+              {`${feedItems.length} live traveller update${feedItems.length === 1 ? "" : "s"}`}
             </div>
             <div style={{ fontSize: 12.5, color: t.muted, lineHeight: 1.45, marginTop: 2 }}>
-              {feedItems.length > 0 ? "Sorted by fresh, traveller-powered context." : "Explore Trip Pulse or create the first local update from your journey."}
+              Sorted by fresh, traveller-powered context.
             </div>
           </div>
           {openTab && (
@@ -402,7 +438,7 @@ export function HomeScreen({ t, openDest, openTab, createdPosts = [] }: { t: The
         ))
       ) : !error && feedItems.length === 0 ? (
         <div style={{
-          textAlign: "center", padding: "34px 20px",
+          textAlign: "center", padding: "30px 22px", maxWidth: 560, margin: "0 auto",
           background: t.card, borderRadius: 20, border: `1px solid ${t.border}`,
         }}>
           <div style={{
@@ -415,7 +451,7 @@ export function HomeScreen({ t, openDest, openTab, createdPosts = [] }: { t: The
           <div style={{ fontSize: 16, fontWeight: 800, color: t.heading }}>No city posts yet</div>
           <div style={{ fontSize: 13, color: t.muted, marginTop: 6, lineHeight: 1.5 }}>CityFeed will fill with recent traveller updates. Until then, Trip Pulse still shows active destinations from live data.</div>
           {openTab && (
-            <button onClick={() => openTab("discover")} style={{ marginTop: 16, padding: "10px 14px", borderRadius: 10, border: "none", background: t.accent, color: "#fff", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>
+            <button onClick={() => openTab("discover")} style={{ marginTop: 16, padding: "10px 14px", borderRadius: 10, border: "none", background: t.accent, color: t.onAccent, fontSize: 13, fontWeight: 800, cursor: "pointer" }}>
               Open Trip Pulse
             </button>
           )}

@@ -18,13 +18,14 @@ and this module:
 Everything about "how to travel" is derived here; the caller never picks a mode.
 """
 
+import asyncio
 import logging
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.trips.geocode import geocode_city
-from app.modules.trips.hubs import nearest_airport
+from app.modules.trips.hubs import nearest_airport, nearest_station
 from app.modules.trips.route_planner import haversine_km, plan_route
 from app.modules.trips.transport import leg_cost
 
@@ -33,43 +34,66 @@ logger = logging.getLogger("tripsova.journey")
 # Distance thresholds (straight-line km) for picking a mode.
 SHORT_KM = 250.0    # at or below → drive
 MEDIUM_KM = 700.0   # at or below → train; above → fly (multi-leg via airports)
-AIRPORT_SKIP_KM = 25.0  # if a city is this close to its airport, skip the drive-to-airport leg
+# If a city is this close to its hub, skip the short "get to the hub" leg — it's just
+# an intra-city taxi/auto ride and only clutters the journey. Most main railway stations
+# sit inside the city, so train access legs almost always fall away here; airports sit
+# further out, so the drive-to-airport leg usually survives.
+HUB_SKIP_KM = 25.0
 
 
 def _pt(d: dict) -> dict:
-    """Strip a geocode/airport result down to the {name, latitude, longitude} a leg needs."""
+    """Strip a geocode/hub result down to the {name, latitude, longitude} a leg needs."""
     return {"name": d["name"], "latitude": d["latitude"], "longitude": d["longitude"]}
 
 
-def choose_legs(origin: dict, destination: dict) -> list[dict]:
+async def _via_hub_legs(o: dict, d: dict, hub_transport: str, nearest) -> Optional[list[dict]]:
+    """Build a 'get to hub → ride → get in from hub' chain for FLIGHT or TRAIN.
+
+    Snaps both ends to their nearest real hub (airport / station). A trivially short
+    access leg (within HUB_SKIP_KM) is dropped. Returns None when there's no usable pair
+    of distinct hubs, so the caller can fall back to a direct ground leg.
+    """
+    oh, dh = await asyncio.gather(nearest(o), nearest(d))
+    if not oh or not dh or oh["name"] == dh["name"]:
+        return None
+    oh_pt, dh_pt = _pt(oh), _pt(dh)
+    legs: list[dict] = []
+    if oh["distanceKm"] > HUB_SKIP_KM:
+        legs.append({"origin": o, "destination": oh_pt, "transport": "CAR"})
+    legs.append({"origin": oh_pt, "destination": dh_pt, "transport": hub_transport})
+    if dh["distanceKm"] > HUB_SKIP_KM:
+        legs.append({"origin": dh_pt, "destination": d, "transport": "CAR"})
+    return legs
+
+
+async def choose_legs(origin: dict, destination: dict) -> list[dict]:
     """Decide the leg(s) and their transport between two coordinate points.
 
-    Returns a list of {origin, destination, transport}. Short → CAR, medium → TRAIN,
-    long → drive→FLIGHT→drive through the nearest airports (legs that would be trivially
-    short are dropped, and a flight that maps to the same airport falls back to TRAIN).
+    Returns a list of {origin, destination, transport}:
+      - Short (≤ SHORT_KM) → a single CAR leg.
+      - Medium (≤ MEDIUM_KM) → TRAIN, routed station→station through the nearest real
+        railway stations (with a drive-in leg only if a station is unusually far).
+      - Long → drive→FLIGHT→drive through the nearest real airports; if flying is
+        pointless (no airports, or both ends share one) it falls back to the train.
     """
     o, d = _pt(origin), _pt(destination)
     straight = haversine_km(o["latitude"], o["longitude"], d["latitude"], d["longitude"])
 
     if straight <= SHORT_KM:
         return [{"origin": o, "destination": d, "transport": "CAR"}]
+
     if straight <= MEDIUM_KM:
-        return [{"origin": o, "destination": d, "transport": "TRAIN"}]
+        # Take the train — but from the real station, not the city centre.
+        via_station = await _via_hub_legs(o, d, "TRAIN", nearest_station)
+        return via_station or [{"origin": o, "destination": d, "transport": "TRAIN"}]
 
-    # Long haul → route through airports.
-    oa, da = nearest_airport(o), nearest_airport(d)
-    if not oa or not da or oa["name"] == da["name"]:
-        # No usable airports, or both ends share one — flying is pointless; take the train.
-        return [{"origin": o, "destination": d, "transport": "TRAIN"}]
-
-    oa_pt, da_pt = _pt(oa), _pt(da)
-    legs: list[dict] = []
-    if oa["distanceKm"] > AIRPORT_SKIP_KM:
-        legs.append({"origin": o, "destination": oa_pt, "transport": "CAR"})
-    legs.append({"origin": oa_pt, "destination": da_pt, "transport": "FLIGHT"})
-    if da["distanceKm"] > AIRPORT_SKIP_KM:
-        legs.append({"origin": da_pt, "destination": d, "transport": "CAR"})
-    return legs
+    # Long haul → fly through airports; if that's not viable, fall back to the train
+    # (still routed through real stations).
+    via_air = await _via_hub_legs(o, d, "FLIGHT", nearest_airport)
+    if via_air:
+        return via_air
+    via_station = await _via_hub_legs(o, d, "TRAIN", nearest_station)
+    return via_station or [{"origin": o, "destination": d, "transport": "TRAIN"}]
 
 
 def _reverse_legs(legs: list[dict]) -> list[dict]:
@@ -118,7 +142,7 @@ async def plan_journey(db: Optional[AsyncSession], data: dict) -> dict:
     origin_pt = await geocode_city(db, origin_name)
     destination_pt = await geocode_city(db, destination_name)
 
-    outbound = choose_legs(origin_pt, destination_pt)
+    outbound = await choose_legs(origin_pt, destination_pt)
     legs = outbound + _reverse_legs(outbound) if round_trip else outbound
 
     route = await plan_route(db, {"legs": legs, "departureTime": data.get("departureTime")})

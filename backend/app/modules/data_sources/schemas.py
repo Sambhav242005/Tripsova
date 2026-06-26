@@ -38,4 +38,5 @@ class DeepReviewResponse(BaseModel):
     sentimentMagnitude: float
     confidenceScore: float
     sourcesUsed: list[dict]
+    topReviews: list[dict] = []
     lastCheckedAt: datetime

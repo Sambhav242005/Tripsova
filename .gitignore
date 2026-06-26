@@ -13,6 +13,7 @@ env/
 # Database files
 *.db
 test_*.db
+*.bak
 
 # Backend
 backend/.env
@@ -47,3 +48,4 @@ Thumbs.db
 
 # Logs
 *.log
+.playwright-mcp

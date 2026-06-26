@@ -1,3 +1,5 @@
+import uuid
+
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -36,11 +38,32 @@ async def get_destination_by_slug(db: AsyncSession, slug: str) -> Destination:
 
 
 async def get_destination_by_id(db: AsyncSession, dest_id: str) -> Destination:
-    result = await db.execute(select(Destination).where(Destination.id == dest_id))
+    # SQLite's UUID column wants a UUID object, not a bare string.
+    try:
+        did = dest_id if isinstance(dest_id, uuid.UUID) else uuid.UUID(str(dest_id))
+    except (ValueError, TypeError):
+        raise NotFoundError(f"Destination with id '{dest_id}' not found")
+    result = await db.execute(select(Destination).where(Destination.id == did))
     dest = result.scalar_one_or_none()
     if not dest:
         raise NotFoundError(f"Destination with id '{dest_id}' not found")
     return dest
+
+
+async def get_destination_by_slug_or_id(db: AsyncSession, identifier: str) -> Destination:
+    """Resolve a destination by UUID when the value parses as one, otherwise by
+    its SEO slug. The public /destinations/[slug] route uses slugs; the in-app
+    overlays open destinations by their UUID id."""
+    try:
+        did = uuid.UUID(str(identifier))
+    except (ValueError, TypeError):
+        did = None
+    if did is not None:
+        result = await db.execute(select(Destination).where(Destination.id == did))
+        dest = result.scalar_one_or_none()
+        if dest:
+            return dest
+    return await get_destination_by_slug(db, identifier)
 
 
 async def create_destination(db: AsyncSession, data: dict) -> Destination:

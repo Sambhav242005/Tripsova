@@ -35,6 +35,7 @@ class FeedPostResponse(BaseModel):
     created_at: datetime
     user_name: Optional[str] = None
     user_avatar: Optional[str] = None
+    destination_name: Optional[str] = None
 
     model_config = {"from_attributes": True}
 

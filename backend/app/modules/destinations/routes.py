@@ -5,7 +5,7 @@ from app.database import get_db
 from app.dependencies import require_admin
 from app.shared.pagination import PaginatedResult
 from app.modules.destinations.schemas import DestinationCreate, DestinationUpdate, DestinationResponse
-from app.modules.destinations.service import get_destinations, get_destination_by_slug, create_destination, update_destination
+from app.modules.destinations.service import get_destinations, get_destination_by_slug_or_id, create_destination, update_destination
 from app.shared.cache import TTLCache
 
 router = APIRouter(prefix="/api/destinations", tags=["Destinations"])
@@ -38,7 +38,7 @@ async def list_destinations(
 
 @router.get("/{slug}", response_model=DestinationResponse)
 async def get_destination(slug: str, db: AsyncSession = Depends(get_db)):
-    dest = await get_destination_by_slug(db, slug)
+    dest = await get_destination_by_slug_or_id(db, slug)
     return DestinationResponse.model_validate(dest)
 
 @router.post("", status_code=201, response_model=DestinationResponse, dependencies=[Depends(require_admin)])

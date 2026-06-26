@@ -10,13 +10,27 @@ from app.modules.trips.ai_provider import plan_trip
 from app.shared.errors import NotFoundError
 
 
+def _optional_uuid(value) -> uuid.UUID | None:
+    """Coerce an optional id (str/UUID/None) to a UUID for the DB layer.
+
+    SQLite's UUID column expects a UUID object; a bare string raises
+    'str' object has no attribute 'hex' on INSERT.
+    """
+    if value is None or value == "":
+        return None
+    try:
+        return value if isinstance(value, uuid.UUID) else uuid.UUID(str(value))
+    except (ValueError, TypeError):
+        return None
+
+
 async def generate_trip(db: AsyncSession, user_id: str, data: dict) -> dict:
     plan = await plan_trip(db, data)
     # `sub` from the JWT is a str; the UUID column wants a UUID on SQLite (Postgres coerces).
     uid = user_id if isinstance(user_id, uuid.UUID) else uuid.UUID(str(user_id))
     trip = Trip(
         user_id=uid,
-        destination_id=plan.get("destinationId"),
+        destination_id=_optional_uuid(plan.get("destinationId")),
         title=data.get("destination", "My Trip"),
         trip_type=data.get("tripType", "SOLO"),
         days=data.get("days", 3),

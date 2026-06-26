@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getDestination, getDestinationPlaces } from "@/lib/server-api";
+import { HomeCrumb } from "@/components/tripova/home-crumb";
 import type { DestinationResponse, PlaceResponse } from "@/lib/types";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://tripsova.com";
@@ -10,10 +11,10 @@ const C = {
   bg: "#FAF9F6",
   card: "#FFFFFF",
   navy: "#1B263B",
-  gold: "#B0894A",
+  gold: "#8A6A2E",
   goldFill: "#D4B483",
   text: "#2E2E2E",
-  muted: "#6E7681",
+  muted: "#636A75",
   border: "#E4E2DC",
   teal: "#5E8295",
   tag: "#EFEDE8",
@@ -181,9 +182,7 @@ export default async function DestinationDetailPage({ params }: Props) {
 
       <div style={{ maxWidth: 880, margin: "0 auto", padding: "32px 20px 80px" }}>
         <nav style={{ fontSize: 13, color: C.muted, marginBottom: 18 }}>
-          <Link href="/" style={{ color: C.muted, textDecoration: "none" }}>
-            Home
-          </Link>
+          <HomeCrumb color={C.muted} />
           {" / "}
           <Link href="/destinations" style={{ color: C.muted, textDecoration: "none" }}>
             Destinations
@@ -305,7 +304,7 @@ export default async function DestinationDetailPage({ params }: Props) {
             Get an AI itinerary, verified companions and an offline pack — built from real traveller updates.
           </p>
           <Link
-            href="/app"
+            href="/login"
             style={{
               display: "inline-block",
               background: C.goldFill,

@@ -4,6 +4,7 @@ from sqlalchemy import select, func, false
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.places.models import Place
+from app.shared.diet import diet_tags_match
 from app.shared.errors import NotFoundError
 from app.shared.pagination import PaginatedResult, PaginatedParams, paginate_query
 from app.shared.utils import slugify
@@ -31,7 +32,11 @@ async def get_places(
     if search:
         stmt = stmt.where(func.lower(Place.name).like(f"%{search.lower()}%"))
     if diet:
-        stmt = stmt.where(Place.diet_tags.any(diet))
+        # diet_tags is a JSON column — resolve matching ids in Python (case- and
+        # alias-aware), then constrain the paginated query by those ids.
+        rows = (await db.execute(select(Place.id, Place.diet_tags))).all()
+        matching = [pid for pid, tags in rows if diet_tags_match(tags, [diet])]
+        stmt = stmt.where(Place.id.in_(matching) if matching else false())
 
     if sort_by == "tripova_score":
         stmt = stmt.order_by(Place.tripova_score.desc().nullslast())
@@ -95,11 +100,13 @@ async def get_nearby_places(
     )
     if place_type:
         stmt = stmt.where(Place.type == place_type)
-    if diet:
-        stmt = stmt.where(Place.diet_tags.any(diet))
     stmt = stmt.order_by(Place.tripova_score.desc().nullslast())
     result = await db.execute(stmt)
-    return result.scalars().all()
+    places = result.scalars().all()
+    if diet:
+        # JSON column — filter membership in Python (case- and alias-aware).
+        places = [p for p in places if diet_tags_match(p.diet_tags, [diet])]
+    return places
 
 
 async def create_place(db: AsyncSession, data: dict) -> Place:

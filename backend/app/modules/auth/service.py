@@ -38,7 +38,11 @@ async def register_user(db: AsyncSession, request) -> dict:
         email=request.email,
         password_hash=hash_password(request.password),
         name=request.name,
-        role=request.role if hasattr(request, "role") else "USER",
+        # Self-registration is always a plain USER. Privilege escalation guard:
+        # never read a role off the request body, or a client could POST
+        # {"role": "ADMIN"} and mint themselves an admin account. ADMINs are
+        # provisioned out-of-band (seed/CLI), never through this endpoint.
+        role="USER",
     )
     db.add(user)
     await db.flush()

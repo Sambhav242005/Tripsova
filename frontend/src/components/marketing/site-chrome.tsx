@@ -7,10 +7,10 @@ export const C = {
   card: "#FFFFFF",
   navy: "#1B263B",
   navy2: "#0F1722",
-  gold: "#B0894A",
+  gold: "#8A6A2E",
   goldFill: "#D4B483",
   text: "#2E2E2E",
-  muted: "#6E7681",
+  muted: "#636A75",
   border: "#E4E2DC",
   teal: "#5E8295",
   tag: "#EFEDE8",
@@ -46,7 +46,7 @@ export function SiteHeader() {
         }}
       >
         <Link
-          href="/"
+          href="/welcome"
           style={{ display: "flex", alignItems: "center", gap: 12, textDecoration: "none" }}
         >
           <LogoMark size={44} />
@@ -75,7 +75,7 @@ export function SiteHeader() {
             ))}
           </span>
           <Link
-            href="/app"
+            href="/login"
             style={{
               fontSize: 14,
               fontWeight: 700,
@@ -101,9 +101,9 @@ export function SiteFooter() {
     {
       title: "Product",
       links: [
-        { href: "/app", label: "Open app" },
+        { href: "/login", label: "Open app" },
         { href: "/destinations", label: "Destinations" },
-        { href: "/#how-it-works", label: "How it works" },
+        { href: "/welcome#how-it-works", label: "How it works" },
       ],
     },
     {

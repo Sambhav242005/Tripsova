@@ -6,12 +6,13 @@ export const LIGHT = {
   bg2: "#ECECEC",       // Pearl Grey
   card: "#FFFFFF",
   accent: "#1B263B",    // Midnight Navy (primary)
+  onAccent: "#FFFFFF",  // text/icon colour on accent-filled surfaces (white on navy ≈ 15:1)
   secondary: "#6C8BA7", // Dusty Blue
-  gold: "#B0894A",      // Champagne (darkened for legible text/icons on light)
+  gold: "#8A6A2E",      // Deep champagne — meets WCAG AA (4.5:1) as text/icons on light
   goldFill: "#D4B483",  // Champagne Gold (fills, icon-on-navy)
   text: "#2E2E2E",      // Graphite
   heading: "#1B263B",   // Navy
-  muted: "#6E7681",
+  muted: "#636A75",     // darkened from #6E7681 to clear WCAG AA on off-white/tag bg
   border: "#E4E2DC",
   success: "#3F8F5B",
   warning: "#C8922E",
@@ -26,7 +27,8 @@ export const DARK = {
   bg2: "#161D29",
   card: "#1C2533",
   accent: "#8AA9C6",    // lightened dusty blue for contrast on dark
-  secondary: "#6C8BA7",
+  onAccent: "#11161F",  // dark text on the light accent fill (≈ 7.4:1, clears WCAG AA)
+  secondary: "#7E9CB6", // lightened dusty blue — clears WCAG AA (4.5:1) as small text on cards
   gold: "#D9B871",
   goldFill: "#E3C58A",
   text: "#E6E8EC",
