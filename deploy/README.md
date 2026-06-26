@@ -16,10 +16,11 @@ The workflow in `.github/workflows/deploy.yml` is event-driven:
 8. Verify the homepage, the public logo asset, and `/api/destinations`.
 
 The Pi exposes nginx on `http://192.168.1.5:80` and `https://192.168.1.5:443`.
-The frontend container is published on host port `5174` for local debugging, but
-browser traffic should normally enter through nginx. Nginx proxies `/api/*` to
-the backend container internally, so the backend does not publish a direct LAN
-port.
+Neither the frontend nor the backend publishes a host port: both are reachable
+only inside the compose network, and all browser traffic enters through nginx,
+which proxies `/api/*` to the backend and everything else to the frontend
+container internally. To debug a container directly, attach to the compose
+network (e.g. `docker compose exec`) rather than re-publishing a host port.
 
 Cloudflare Tunnel should point at nginx on port 80 or 443. The frontend uses
 relative API URLs in the browser, which avoids private-LAN API URLs being baked
@@ -36,3 +37,26 @@ Add Python packages to `backend/requirements.txt`, frontend packages through
 Containers use `restart: unless-stopped`, and the database state lives in the
 named Docker volume `tripsova_pgdata`. Do not remove that volume unless you
 intend to wipe production data.
+
+## Runtime config / optional API keys
+
+The deploy job only auto-generates `JWT_SECRET` in `/home/sambhav/.tripsova/deploy.env`.
+Any other variable referenced by `deploy/docker-compose.yml` (interpolated from that
+same `--env-file`) must be added there by hand. The file lives outside the repo
+checkout, so `git clean -fdx` never touches it and the value persists across deploys.
+
+Optional keys (compose passes an empty string when absent, and the feature degrades
+gracefully):
+
+| Variable | Effect when set |
+|----------|-----------------|
+| `GOOGLE_PLACES_API_KEY` | Google **Places API (New)** fallback for food search where OSM coverage is thin. |
+
+```bash
+# one-time, as the runner user on the Pi:
+echo 'GOOGLE_PLACES_API_KEY=AIza...' >> /home/sambhav/.tripsova/deploy.env
+chmod 600 /home/sambhav/.tripsova/deploy.env
+```
+
+Compose re-reads `--env-file` only on `up`, so apply it by triggering a deploy
+(push to `master`) or re-running the compose `up -d` step manually.

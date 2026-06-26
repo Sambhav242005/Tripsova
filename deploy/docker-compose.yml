@@ -60,8 +60,13 @@ services:
       # here (e.g. a LAN IP from deploy/.env) freezes it into the client JS and
       # triggers the browser's Local Network Access prompt. The Dockerfile pins it
       # to empty so this can't happen.
-    ports:
-      - "5174:5173"
+    # No host port mapping — the frontend is reachable only inside the compose
+    # network, exclusively through the nginx reverse proxy (ports 80/443). nginx
+    # proxies `location /` to frontend:5173 via Docker DNS, so nothing needs to be
+    # published to the host. `expose` documents the internal port without opening
+    # it on the host (unlike `ports:`, which previously bound host :5174).
+    expose:
+      - "5173"
     environment:
       # Server-side only (SSR / metadata fetches). Never reaches the browser.
       API_URL_INTERNAL: ${API_URL_INTERNAL:-http://backend:8010}
